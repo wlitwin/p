@@ -7,6 +7,7 @@ import (
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/validate"
 )
 
 func makeStateCmd(name string, state todo.State, short string) *cobra.Command {
@@ -78,6 +79,9 @@ var priorityCmd = &cobra.Command{
 			return err
 		}
 
+		if err := validate.Priority(args[3]); err != nil {
+			return err
+		}
 		item.Priority = todo.Priority(args[3])
 
 		if err := todo.SaveList(dir, args[1], list); err != nil {
@@ -117,6 +121,9 @@ var dueCmd = &cobra.Command{
 			return err
 		}
 
+		if err := validate.Date(args[3]); err != nil {
+			return err
+		}
 		item.Due = args[3]
 
 		if err := todo.SaveList(dir, args[1], list); err != nil {

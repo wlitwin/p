@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/tui"
 )
 
 var listCmd = &cobra.Command{
@@ -107,18 +108,26 @@ func printItems(items []*todo.Item, prefix string, start int) {
 			marker = "[-]"
 		}
 
-		meta := ""
+		styledMarker := tui.StateStyle(marker)
+		styledID := tui.Dim.Render(id + ".")
+
+		var meta string
 		if item.Priority == todo.Backlog {
-			meta += " priority=backlog"
+			meta += " " + tui.Dim.Render("priority=backlog")
 		}
 		if item.Due != "" {
-			meta += " due=" + item.Due
+			meta += " " + tui.Cyan.Render("due="+item.Due)
 		}
 		if item.DoneDate != "" {
-			meta += " done=" + item.DoneDate
+			meta += " " + tui.Green.Render("done="+item.DoneDate)
 		}
 
-		fmt.Printf("  %s. %s %s%s\n", id, marker, item.Text, meta)
+		text := item.Text
+		if item.State == todo.Done {
+			text = tui.Dim.Render(text)
+		}
+
+		fmt.Printf("  %s %s %s%s\n", styledID, styledMarker, text, meta)
 
 		if len(item.Children) > 0 {
 			printItems(item.Children, id+".", 1)

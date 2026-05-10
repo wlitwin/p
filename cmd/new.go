@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/project"
+	"github.com/walter/p/internal/validate"
 )
 
 var newCmd = &cobra.Command{
@@ -18,6 +19,9 @@ var newCmd = &cobra.Command{
 		}
 
 		name := args[0]
+		if err := validate.ProjectName(name); err != nil {
+			return err
+		}
 		desc, _ := cmd.Flags().GetString("description")
 
 		if err := project.Create(cfg.ProjectRoot, name, desc); err != nil {
