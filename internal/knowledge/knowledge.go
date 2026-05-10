@@ -130,6 +130,35 @@ func ReplaceSection(projectDir, filename, section, newContent string) error {
 	return os.WriteFile(path, []byte(text), 0o644)
 }
 
+func ExtractTags(content string) []string {
+	lines := strings.Split(content, "\n")
+	inFrontmatter := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "---" {
+			if inFrontmatter {
+				return nil
+			}
+			inFrontmatter = true
+			continue
+		}
+		if inFrontmatter && strings.HasPrefix(trimmed, "tags:") {
+			val := strings.TrimPrefix(trimmed, "tags:")
+			val = strings.TrimSpace(val)
+			val = strings.Trim(val, "[]")
+			var tags []string
+			for _, t := range strings.Split(val, ",") {
+				t = strings.TrimSpace(t)
+				if t != "" {
+					tags = append(tags, t)
+				}
+			}
+			return tags
+		}
+	}
+	return nil
+}
+
 func Delete(projectDir, filename string) error {
 	path := FilePath(projectDir, filename)
 	if _, err := os.Stat(path); err != nil {

@@ -10,9 +10,12 @@ import (
 
 var cfg config.Config
 
+var Version = "dev"
+
 var rootCmd = &cobra.Command{
-	Use:   "p",
-	Short: "Project knowledge & task manager",
+	Use:     "p",
+	Short:   "Project knowledge & task manager",
+	Version: Version,
 }
 
 func Execute() {

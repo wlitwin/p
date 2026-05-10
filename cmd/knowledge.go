@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"strings"
+
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
@@ -131,9 +133,167 @@ func indexOf(s, substr string) int {
 	return -1
 }
 
+var knowledgeListCmd = &cobra.Command{
+	Use:   "list <project>",
+	Short: "List knowledge documents with details",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireProjectRoot(); err != nil {
+			return err
+		}
+
+		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
+		if err != nil {
+			return err
+		}
+
+		files, err := knowledge.ListFiles(dir)
+		if err != nil {
+			return err
+		}
+		if len(files) == 0 {
+			fmt.Println("No knowledge docs.")
+			return nil
+		}
+
+		tagFilter, _ := cmd.Flags().GetString("tag")
+
+		for _, f := range files {
+			content, err := knowledge.Read(dir, f)
+			if err != nil {
+				continue
+			}
+			tags := knowledge.ExtractTags(content)
+
+			if tagFilter != "" {
+				found := false
+				for _, t := range tags {
+					if t == tagFilter {
+						found = true
+						break
+					}
+				}
+				if !found {
+					continue
+				}
+			}
+
+			info, _ := os.Stat(knowledge.FilePath(dir, f))
+			size := ""
+			if info != nil {
+				size = fmt.Sprintf("%d bytes", info.Size())
+			}
+
+			tagStr := ""
+			if len(tags) > 0 {
+				tagStr = " [" + strings.Join(tags, ", ") + "]"
+			}
+			fmt.Printf("  %-20s  %s%s\n", f, size, tagStr)
+		}
+		return nil
+	},
+}
+
+var knowledgeCreateFromTemplateCmd = &cobra.Command{
+	Use:   "create <project> <filename> <title>",
+	Short: "Create a knowledge doc, optionally from a template",
+	Args:  cobra.ExactArgs(3),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireProjectRoot(); err != nil {
+			return err
+		}
+
+		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
+		if err != nil {
+			return err
+		}
+
+		template, _ := cmd.Flags().GetString("template")
+		tagsStr, _ := cmd.Flags().GetString("tags")
+		var tags []string
+		if tagsStr != "" {
+			for _, t := range strings.Split(tagsStr, ",") {
+				tags = append(tags, strings.TrimSpace(t))
+			}
+		}
+
+		if err := knowledge.Create(dir, args[1], args[2], tags); err != nil {
+			return err
+		}
+
+		if template != "" {
+			content := templateContent(template)
+			if content != "" {
+				knowledge.Append(dir, args[1], content, "")
+			}
+		}
+
+		if err := git.CommitAll(dir, fmt.Sprintf("p: create knowledge doc %q", args[2])); err != nil {
+			return fmt.Errorf("committing: %w", err)
+		}
+
+		fmt.Printf("Created knowledge/%s.md\n", args[1])
+		return nil
+	},
+}
+
+func templateContent(name string) string {
+	switch name {
+	case "decision-record":
+		return `## Context
+
+What is the issue that we're seeing that is motivating this decision or change?
+
+## Decision
+
+What is the change that we're proposing and/or doing?
+
+## Consequences
+
+What becomes easier or more difficult to do because of this change?`
+
+	case "meeting-notes":
+		return `## Attendees
+
+-
+
+## Agenda
+
+1.
+
+## Notes
+
+## Action Items
+
+- [ ]`
+
+	case "runbook":
+		return `## Overview
+
+## Prerequisites
+
+## Steps
+
+1.
+
+## Troubleshooting
+
+## Rollback`
+
+	default:
+		return ""
+	}
+}
+
 func init() {
 	knowledgeDeleteCmd.Flags().BoolP("yes", "y", false, "Skip confirmation")
+	knowledgeListCmd.Flags().String("tag", "", "Filter by tag")
+	knowledgeCreateFromTemplateCmd.Flags().String("template", "", "Template: decision-record, meeting-notes, runbook")
+	knowledgeCreateFromTemplateCmd.Flags().String("tags", "", "Comma-separated tags")
+
 	knowledgeCmd.AddCommand(knowledgeDeleteCmd)
 	knowledgeCmd.AddCommand(knowledgeSearchCmd)
+	knowledgeCmd.AddCommand(knowledgeListCmd)
+	knowledgeCmd.AddCommand(knowledgeCreateFromTemplateCmd)
 	rootCmd.AddCommand(knowledgeCmd)
 }
