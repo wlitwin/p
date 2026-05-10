@@ -130,6 +130,14 @@ func ReplaceSection(projectDir, filename, section, newContent string) error {
 	return os.WriteFile(path, []byte(text), 0o644)
 }
 
+func Delete(projectDir, filename string) error {
+	path := FilePath(projectDir, filename)
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("knowledge doc %q not found", filename)
+	}
+	return os.Remove(path)
+}
+
 func Rename(projectDir, oldName, newName string) error {
 	oldPath := FilePath(projectDir, oldName)
 	newPath := FilePath(projectDir, newName)

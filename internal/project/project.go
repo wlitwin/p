@@ -89,7 +89,7 @@ func Resolve(root, name string) (string, error) {
 	dir := filepath.Join(root, name)
 	configPath := filepath.Join(dir, ".p", "config.yaml")
 	if _, err := os.Stat(configPath); err != nil {
-		return "", fmt.Errorf("project %q not found", name)
+		return "", fmt.Errorf("project %q not found — run `p new %s` to create it, or `p list` to see existing projects", name, name)
 	}
 	return dir, nil
 }

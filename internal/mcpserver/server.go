@@ -31,12 +31,14 @@ func NewServer(projectRoot string) *server.MCPServer {
 	s.AddTool(todoUpdateTool(), ctx.handleTodoUpdate)
 	s.AddTool(todoStateTool(), ctx.handleTodoState)
 	s.AddTool(todoRemoveTool(), ctx.handleTodoRemove)
+	s.AddTool(todoMoveTool(), ctx.handleTodoMove)
 
 	// Knowledge mutation tools
 	s.AddTool(knowledgeCreateTool(), ctx.handleKnowledgeCreate)
 	s.AddTool(knowledgeAppendTool(), ctx.handleKnowledgeAppend)
 	s.AddTool(knowledgeReplaceTool(), ctx.handleKnowledgeReplace)
 	s.AddTool(knowledgeRenameTool(), ctx.handleKnowledgeRename)
+	s.AddTool(knowledgeDeleteTool(), ctx.handleKnowledgeDelete)
 
 	return s
 }
@@ -158,6 +160,24 @@ func knowledgeRenameTool() mcp.Tool {
 		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
 		mcp.WithString("old_filename", mcp.Description("Current filename (without .md)"), mcp.Required()),
 		mcp.WithString("new_filename", mcp.Description("New filename (without .md)"), mcp.Required()),
+	)
+}
+
+func todoMoveTool() mcp.Tool {
+	return mcp.NewTool("todo_move",
+		mcp.WithDescription("Move a todo item from one list to another."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+		mcp.WithString("list", mcp.Description("Source todo list name"), mcp.Required()),
+		mcp.WithString("item_id", mcp.Description("Item ID to move (e.g. '1' or '2.1')"), mcp.Required()),
+		mcp.WithString("target_list", mcp.Description("Destination todo list name"), mcp.Required()),
+	)
+}
+
+func knowledgeDeleteTool() mcp.Tool {
+	return mcp.NewTool("knowledge_delete",
+		mcp.WithDescription("Delete a knowledge document."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+		mcp.WithString("filename", mcp.Description("Knowledge doc filename (without .md)"), mcp.Required()),
 	)
 }
 
@@ -482,4 +502,72 @@ func (s *serverCtx) handleKnowledgeRename(_ context.Context, req mcp.CallToolReq
 	}
 
 	return textResult(fmt.Sprintf("Renamed knowledge/%s.md to knowledge/%s.md", oldName, newName)), nil
+}
+
+func (s *serverCtx) handleTodoMove(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	proj := req.GetString("project", "")
+	listName := req.GetString("list", "")
+	itemID := req.GetString("item_id", "")
+	targetList := req.GetString("target_list", "")
+
+	if proj == "" || listName == "" || itemID == "" || targetList == "" {
+		return errResult("project, list, item_id, and target_list are required")
+	}
+
+	dir, err := project.Resolve(s.projectRoot, proj)
+	if err != nil {
+		return errResult("%v", err)
+	}
+
+	srcList, err := todo.LoadList(dir, listName)
+	if err != nil {
+		return errResult("loading source list: %v", err)
+	}
+
+	item, err := todo.ResolveItem(srcList, itemID)
+	if err != nil {
+		return errResult("%v", err)
+	}
+
+	itemCopy := *item
+	if err := todo.RemoveItem(srcList, itemID); err != nil {
+		return errResult("removing from source: %v", err)
+	}
+	if err := todo.SaveList(dir, listName, srcList); err != nil {
+		return errResult("saving source: %v", err)
+	}
+
+	dstList, err := todo.LoadList(dir, targetList)
+	if err != nil {
+		dstList, err = todo.CreateList(dir, targetList, targetList)
+		if err != nil {
+			return errResult("creating target: %v", err)
+		}
+	}
+	dstList.Items = append(dstList.Items, &itemCopy)
+	if err := todo.SaveList(dir, targetList, dstList); err != nil {
+		return errResult("saving target: %v", err)
+	}
+
+	return textResult(fmt.Sprintf("Moved %s #%s to %s", listName, itemID, targetList)), nil
+}
+
+func (s *serverCtx) handleKnowledgeDelete(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	proj := req.GetString("project", "")
+	filename := req.GetString("filename", "")
+
+	if proj == "" || filename == "" {
+		return errResult("project and filename are required")
+	}
+
+	dir, err := project.Resolve(s.projectRoot, proj)
+	if err != nil {
+		return errResult("%v", err)
+	}
+
+	if err := knowledge.Delete(dir, filename); err != nil {
+		return errResult("%v", err)
+	}
+
+	return textResult(fmt.Sprintf("Deleted knowledge/%s.md", filename)), nil
 }

@@ -3,7 +3,10 @@ package cmd
 import (
 	"fmt"
 
+	"os"
+
 	"github.com/spf13/cobra"
+	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
 	"github.com/walter/p/internal/tui"
@@ -69,6 +72,7 @@ func listTodoLists(projectName string) error {
 		return nil
 	}
 
+	fmt.Println(tui.Bold.Render("Todo lists:"))
 	for _, name := range names {
 		list, err := todo.LoadList(dir, name)
 		if err != nil {
@@ -76,7 +80,23 @@ func listTodoLists(projectName string) error {
 			continue
 		}
 		open, done, blocked := countStates(list.Items)
-		fmt.Printf("  %-20s  open=%d blocked=%d done=%d\n", name, open, blocked, done)
+		fmt.Printf("  %-20s  open=%-3d blocked=%-3d done=%-3d\n", name, open, blocked, done)
+	}
+
+	// Also show knowledge docs
+	kFiles, _ := knowledge.ListFiles(dir)
+	if len(kFiles) > 0 {
+		fmt.Println()
+		fmt.Println(tui.Bold.Render("Knowledge docs:"))
+		for _, f := range kFiles {
+			path := knowledge.FilePath(dir, f)
+			info, err := os.Stat(path)
+			size := ""
+			if err == nil {
+				size = tui.Dim.Render(fmt.Sprintf("(%d bytes)", info.Size()))
+			}
+			fmt.Printf("  %-20s  %s\n", f, size)
+		}
 	}
 	return nil
 }
