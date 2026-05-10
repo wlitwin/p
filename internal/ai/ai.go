@@ -93,7 +93,7 @@ func Run(pBinary, claudeBinary, model string, task Task, opts ...RunOptions) err
 		"--system-prompt", prompt,
 		"--mcp-config", string(mcpJSON),
 		"--strict-mcp-config",
-		"--tools", "mcp",
+		"--tools", "mcp,WebFetch,WebSearch",
 		"--dangerously-skip-permissions",
 		"--model", model,
 		"--name", fmt.Sprintf("p-%s", task.ProjectName),

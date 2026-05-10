@@ -11,6 +11,7 @@ import (
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/validate"
 )
 
 // --- Tool definitions ---
@@ -292,6 +293,10 @@ func (s *serverCtx) handleTodoPriority(_ context.Context, req mcp.CallToolReques
 
 	if proj == "" || listName == "" || itemID == "" || priority == "" {
 		return errResult("project, list, item_id, and priority are required")
+	}
+
+	if err := validate.Priority(priority); err != nil {
+		return errResult("%v", err)
 	}
 
 	dir, err := project.Resolve(s.projectRoot, proj)

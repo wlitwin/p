@@ -11,6 +11,7 @@ import (
 	"github.com/walter/p/internal/lock"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/validate"
 )
 
 func NewServer(projectRoot string) *server.MCPServer {
@@ -389,6 +390,10 @@ func (s *serverCtx) handleTodoState(_ context.Context, req mcp.CallToolRequest) 
 
 	if proj == "" || listName == "" || itemID == "" || state == "" {
 		return errResult("project, list, item_id, and state are required")
+	}
+
+	if err := validate.State(state); err != nil {
+		return errResult("%v", err)
 	}
 
 	dir, err := project.Resolve(s.projectRoot, proj)

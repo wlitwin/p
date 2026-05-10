@@ -101,36 +101,7 @@ var knowledgeSearchCmd = &cobra.Command{
 }
 
 func containsIgnoreCase(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		len(substr) > 0 &&
-		findIgnoreCase(s, substr) >= 0
-}
-
-func findIgnoreCase(s, substr string) int {
-	s = toLower(s)
-	substr = toLower(substr)
-	return indexOf(s, substr)
-}
-
-func toLower(s string) string {
-	b := make([]byte, len(s))
-	for i := range s {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		b[i] = c
-	}
-	return string(b)
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 var knowledgeListCmd = &cobra.Command{

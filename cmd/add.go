@@ -124,7 +124,9 @@ Use --ai to have the AI agent decide placement and wording.`,
 
 		// Manual (non-AI) path
 		var listName string
-		if len(args) == 3 {
+		if l, _ := cmd.Flags().GetString("list"); l != "" {
+			listName = l
+		} else if len(args) == 3 {
 			listName = args[1]
 		} else {
 			listName, err = pickList(dir)
@@ -212,6 +214,7 @@ func init() {
 	addCmd.Flags().BoolP("knowledge", "k", false, "Add to knowledge base instead of todos")
 	addCmd.Flags().Bool("ai", false, "Use AI agent for smart placement and wording")
 	addCmd.Flags().BoolP("yes", "y", false, "Auto-confirm AI changes without prompting")
+	addCmd.Flags().StringP("list", "l", "", "Target todo list (skips interactive picker)")
 	addCmd.Flags().String("priority", "", "Priority: now or backlog (default: now)")
 	addCmd.Flags().String("due", "", "Due date: YYYY-MM-DD")
 	rootCmd.AddCommand(addCmd)
