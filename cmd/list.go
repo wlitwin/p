@@ -107,6 +107,11 @@ func listTodoLists(projectName string) error {
 		fmt.Printf("  %-20s  open=%-3d blocked=%-3d done=%-3d\n", name, open, blocked, done)
 	}
 
+	archived, _ := todo.ArchivedListNames(dir)
+	if len(archived) > 0 {
+		fmt.Printf("\n%s\n", tui.Dim.Render(fmt.Sprintf("  + %d archived list(s) — use p archive-list --restore to restore", len(archived))))
+	}
+
 	// Also show knowledge docs
 	kFiles, _ := knowledge.ListFiles(dir)
 	if len(kFiles) > 0 {

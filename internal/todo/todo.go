@@ -88,6 +88,26 @@ func ListNames(projectDir string) ([]string, error) {
 	return names, nil
 }
 
+func ArchivedListNames(projectDir string) ([]string, error) {
+	dir := filepath.Join(ListDir(projectDir), ".archive")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		names = append(names, strings.TrimSuffix(e.Name(), ".md"))
+	}
+	return names, nil
+}
+
 func ListPath(projectDir, listName string) string {
 	return filepath.Join(ListDir(projectDir), listName+".md")
 }
