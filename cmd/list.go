@@ -4,7 +4,9 @@ import (
 	"fmt"
 
 	"os"
+	"os/exec"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/knowledge"
@@ -45,17 +47,38 @@ func listProjects(cmd *cobra.Command) error {
 		return nil
 	}
 	for _, p := range projects {
+		dir, _ := project.Resolve(cfg.ProjectRoot, p.Name)
+
 		status := ""
 		if p.Archived {
-			status = " (archived)"
+			status = tui.Dim.Render(" (archived)")
 		}
 		desc := ""
 		if p.Description != "" {
 			desc = " — " + p.Description
 		}
-		fmt.Printf("  %s%s%s\n", p.Name, desc, status)
+
+		created := tui.Dim.Render("created=" + p.Created.Format("2006-01-02"))
+		lastMod := lastCommitDate(dir)
+		updated := ""
+		if lastMod != "" {
+			updated = " " + tui.Dim.Render("updated="+lastMod)
+		}
+
+		fmt.Printf("  %s%s%s\n", tui.Bold.Render(p.Name), desc, status)
+		fmt.Printf("    %s %s%s\n", tui.Dim.Render(dir), created, updated)
 	}
 	return nil
+}
+
+func lastCommitDate(dir string) string {
+	cmd := exec.Command("git", "log", "-1", "--format=%cs")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func listTodoLists(projectName string) error {
