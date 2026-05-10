@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/git"
-	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
 	"github.com/walter/p/internal/validate"
 )
@@ -27,37 +26,30 @@ func makeStateCmd(name string, state todo.State, short string) *cobra.Command {
 }
 
 func setItemState(projectName, listName, itemID string, state todo.State) error {
-	if err := requireProjectRoot(); err != nil {
-		return err
-	}
+	return withProjectLock(projectName, func(dir string) error {
+		list, err := todo.LoadList(dir, listName)
+		if err != nil {
+			return err
+		}
 
-	dir, err := project.Resolve(cfg.ProjectRoot, projectName)
-	if err != nil {
-		return err
-	}
+		item, err := todo.ResolveItem(list, itemID)
+		if err != nil {
+			return err
+		}
 
-	list, err := todo.LoadList(dir, listName)
-	if err != nil {
-		return err
-	}
+		todo.SetState(item, state)
 
-	item, err := todo.ResolveItem(list, itemID)
-	if err != nil {
-		return err
-	}
+		if err := todo.SaveList(dir, listName, list); err != nil {
+			return err
+		}
 
-	todo.SetState(item, state)
+		if err := git.CommitAll(dir, fmt.Sprintf("p: mark %s #%s as %s", listName, itemID, state)); err != nil {
+			return fmt.Errorf("committing: %w", err)
+		}
 
-	if err := todo.SaveList(dir, listName, list); err != nil {
-		return err
-	}
-
-	if err := git.CommitAll(dir, fmt.Sprintf("p: mark %s #%s as %s", listName, itemID, state)); err != nil {
-		return fmt.Errorf("committing: %w", err)
-	}
-
-	fmt.Printf("Marked %s #%s as %s\n", listName, itemID, state)
-	return nil
+		fmt.Printf("Marked %s #%s as %s\n", listName, itemID, state)
+		return nil
+	})
 }
 
 var priorityCmd = &cobra.Command{
@@ -65,40 +57,28 @@ var priorityCmd = &cobra.Command{
 	Short: "Set item priority",
 	Args:  cobra.ExactArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-
-		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
-		if err != nil {
-			return err
-		}
-
-		list, err := todo.LoadList(dir, args[1])
-		if err != nil {
-			return err
-		}
-
-		item, err := todo.ResolveItem(list, args[2])
-		if err != nil {
-			return err
-		}
-
 		if err := validate.Priority(args[3]); err != nil {
 			return err
 		}
-		item.Priority = todo.Priority(args[3])
-
-		if err := todo.SaveList(dir, args[1], list); err != nil {
-			return err
-		}
-
-		if err := git.CommitAll(dir, fmt.Sprintf("p: set %s #%s priority to %s", args[1], args[2], args[3])); err != nil {
-			return fmt.Errorf("committing: %w", err)
-		}
-
-		fmt.Printf("Set %s #%s priority to %s\n", args[1], args[2], args[3])
-		return nil
+		return withProjectLock(args[0], func(dir string) error {
+			list, err := todo.LoadList(dir, args[1])
+			if err != nil {
+				return err
+			}
+			item, err := todo.ResolveItem(list, args[2])
+			if err != nil {
+				return err
+			}
+			item.Priority = todo.Priority(args[3])
+			if err := todo.SaveList(dir, args[1], list); err != nil {
+				return err
+			}
+			if err := git.CommitAll(dir, fmt.Sprintf("p: set %s #%s priority to %s", args[1], args[2], args[3])); err != nil {
+				return fmt.Errorf("committing: %w", err)
+			}
+			fmt.Printf("Set %s #%s priority to %s\n", args[1], args[2], args[3])
+			return nil
+		})
 	},
 }
 
@@ -107,40 +87,28 @@ var dueCmd = &cobra.Command{
 	Short: "Set item due date",
 	Args:  cobra.ExactArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-
-		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
-		if err != nil {
-			return err
-		}
-
-		list, err := todo.LoadList(dir, args[1])
-		if err != nil {
-			return err
-		}
-
-		item, err := todo.ResolveItem(list, args[2])
-		if err != nil {
-			return err
-		}
-
 		if err := validate.Date(args[3]); err != nil {
 			return err
 		}
-		item.Due = args[3]
-
-		if err := todo.SaveList(dir, args[1], list); err != nil {
-			return err
-		}
-
-		if err := git.CommitAll(dir, fmt.Sprintf("p: set %s #%s due date to %s", args[1], args[2], args[3])); err != nil {
-			return fmt.Errorf("committing: %w", err)
-		}
-
-		fmt.Printf("Set %s #%s due date to %s\n", args[1], args[2], args[3])
-		return nil
+		return withProjectLock(args[0], func(dir string) error {
+			list, err := todo.LoadList(dir, args[1])
+			if err != nil {
+				return err
+			}
+			item, err := todo.ResolveItem(list, args[2])
+			if err != nil {
+				return err
+			}
+			item.Due = args[3]
+			if err := todo.SaveList(dir, args[1], list); err != nil {
+				return err
+			}
+			if err := git.CommitAll(dir, fmt.Sprintf("p: set %s #%s due date to %s", args[1], args[2], args[3])); err != nil {
+				return fmt.Errorf("committing: %w", err)
+			}
+			fmt.Printf("Set %s #%s due date to %s\n", args[1], args[2], args[3])
+			return nil
+		})
 	},
 }
 

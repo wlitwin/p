@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/walter/p/internal/knowledge"
+	"github.com/walter/p/internal/lock"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
 )
@@ -32,24 +33,24 @@ func NewServer(projectRoot string) *server.MCPServer {
 
 	// Project mutation tools
 	s.AddTool(projectCreateTool(), ctx.handleProjectCreate)
-	s.AddTool(projectArchiveTool(), ctx.handleProjectArchive)
+	s.AddTool(projectArchiveTool(), ctx.locked(ctx.handleProjectArchive))
 
 	// Todo mutation tools
-	s.AddTool(todoAddTool(), ctx.handleTodoAdd)
-	s.AddTool(todoUpdateTool(), ctx.handleTodoUpdate)
-	s.AddTool(todoStateTool(), ctx.handleTodoState)
-	s.AddTool(todoPriorityTool(), ctx.handleTodoPriority)
-	s.AddTool(todoDueTool(), ctx.handleTodoDue)
-	s.AddTool(todoRemoveTool(), ctx.handleTodoRemove)
-	s.AddTool(todoMoveTool(), ctx.handleTodoMove)
-	s.AddTool(todoRmListTool(), ctx.handleTodoRmList)
+	s.AddTool(todoAddTool(), ctx.locked(ctx.handleTodoAdd))
+	s.AddTool(todoUpdateTool(), ctx.locked(ctx.handleTodoUpdate))
+	s.AddTool(todoStateTool(), ctx.locked(ctx.handleTodoState))
+	s.AddTool(todoPriorityTool(), ctx.locked(ctx.handleTodoPriority))
+	s.AddTool(todoDueTool(), ctx.locked(ctx.handleTodoDue))
+	s.AddTool(todoRemoveTool(), ctx.locked(ctx.handleTodoRemove))
+	s.AddTool(todoMoveTool(), ctx.locked(ctx.handleTodoMove))
+	s.AddTool(todoRmListTool(), ctx.locked(ctx.handleTodoRmList))
 
 	// Knowledge mutation tools
-	s.AddTool(knowledgeCreateTool(), ctx.handleKnowledgeCreate)
-	s.AddTool(knowledgeAppendTool(), ctx.handleKnowledgeAppend)
-	s.AddTool(knowledgeReplaceTool(), ctx.handleKnowledgeReplace)
-	s.AddTool(knowledgeRenameTool(), ctx.handleKnowledgeRename)
-	s.AddTool(knowledgeDeleteTool(), ctx.handleKnowledgeDelete)
+	s.AddTool(knowledgeCreateTool(), ctx.locked(ctx.handleKnowledgeCreate))
+	s.AddTool(knowledgeAppendTool(), ctx.locked(ctx.handleKnowledgeAppend))
+	s.AddTool(knowledgeReplaceTool(), ctx.locked(ctx.handleKnowledgeReplace))
+	s.AddTool(knowledgeRenameTool(), ctx.locked(ctx.handleKnowledgeRename))
+	s.AddTool(knowledgeDeleteTool(), ctx.locked(ctx.handleKnowledgeDelete))
 
 	return s
 }
@@ -68,6 +69,30 @@ func textResult(text string) *mcp.CallToolResult {
 
 func errResult(format string, args ...any) (*mcp.CallToolResult, error) {
 	return mcp.NewToolResultError(fmt.Sprintf(format, args...)), nil
+}
+
+type toolHandler = func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
+
+func (s *serverCtx) locked(handler toolHandler) toolHandler {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		proj := req.GetString("project", "")
+		if proj == "" {
+			return handler(ctx, req)
+		}
+
+		dir, err := project.Resolve(s.projectRoot, proj)
+		if err != nil {
+			return handler(ctx, req)
+		}
+
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return errResult("%v", err)
+		}
+		defer lk.Release()
+
+		return handler(ctx, req)
+	}
 }
 
 // --- Tool definitions --- Project tools ---

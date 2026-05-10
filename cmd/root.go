@@ -6,6 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/config"
+	"github.com/walter/p/internal/lock"
+	"github.com/walter/p/internal/project"
 )
 
 var cfg config.Config
@@ -42,4 +44,23 @@ func requireProjectRoot() error {
 		return fmt.Errorf("project root not configured — run `p init` first")
 	}
 	return nil
+}
+
+func withProjectLock(projectName string, fn func(dir string) error) error {
+	if err := requireProjectRoot(); err != nil {
+		return err
+	}
+
+	dir, err := project.Resolve(cfg.ProjectRoot, projectName)
+	if err != nil {
+		return err
+	}
+
+	lk, err := lock.Acquire(dir)
+	if err != nil {
+		return err
+	}
+	defer lk.Release()
+
+	return fn(dir)
 }
