@@ -30,6 +30,7 @@ type Item struct {
 	Due      string
 	Created  string
 	DoneDate string
+	Tags     []string
 	Children []*Item
 }
 

@@ -27,7 +27,7 @@ var listCmd = &cobra.Command{
 		case 1:
 			return listTodoLists(args[0])
 		case 2:
-			return listItems(args[0], args[1])
+			return listItems(args[0], args[1], cmd)
 		}
 		return nil
 	},
@@ -101,7 +101,7 @@ func listTodoLists(projectName string) error {
 	return nil
 }
 
-func listItems(projectName, listName string) error {
+func listItems(projectName, listName string, cmd *cobra.Command) error {
 	dir, err := project.Resolve(cfg.ProjectRoot, projectName)
 	if err != nil {
 		return err
@@ -112,9 +112,45 @@ func listItems(projectName, listName string) error {
 		return err
 	}
 
+	stateFilter, _ := cmd.Flags().GetString("state")
+	priorityFilter, _ := cmd.Flags().GetString("priority")
+	tagFilter, _ := cmd.Flags().GetString("tag")
+
+	filtered := filterItems(list.Items, stateFilter, priorityFilter, tagFilter)
+
 	fmt.Printf("# %s\n\n", list.Title)
-	printItems(list.Items, "", 1)
+	printItems(filtered, "", 1)
 	return nil
+}
+
+func filterItems(items []*todo.Item, state, priority, tag string) []*todo.Item {
+	if state == "" && priority == "" && tag == "" {
+		return items
+	}
+
+	var result []*todo.Item
+	for _, item := range items {
+		if state != "" && string(item.State) != state {
+			continue
+		}
+		if priority != "" && string(item.Priority) != priority {
+			continue
+		}
+		if tag != "" && !hasTag(item, tag) {
+			continue
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
+func hasTag(item *todo.Item, tag string) bool {
+	for _, t := range item.Tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }
 
 func printItems(items []*todo.Item, prefix string, start int) {
@@ -175,5 +211,8 @@ func countStates(items []*todo.Item) (open, done, blocked int) {
 
 func init() {
 	listCmd.Flags().Bool("all", false, "Include archived projects")
+	listCmd.Flags().String("state", "", "Filter by state: open, blocked, done")
+	listCmd.Flags().String("priority", "", "Filter by priority: now, backlog")
+	listCmd.Flags().String("tag", "", "Filter by tag")
 	rootCmd.AddCommand(listCmd)
 }

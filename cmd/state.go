@@ -12,11 +12,16 @@ import (
 
 func makeStateCmd(name string, state todo.State, short string) *cobra.Command {
 	return &cobra.Command{
-		Use:   fmt.Sprintf("%s <project> <list> <item-id>", name),
+		Use:   fmt.Sprintf("%s <project> <list> <item-id> [item-id...]", name),
 		Short: short,
-		Args:  cobra.ExactArgs(3),
+		Args:  cobra.MinimumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return setItemState(args[0], args[1], args[2], state)
+			for _, id := range args[2:] {
+				if err := setItemState(args[0], args[1], id, state); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	}
 }
