@@ -125,7 +125,6 @@ Examples:
 		claudeArgs := []string{
 			"--system-prompt", taskDesc,
 			"--mcp-config", string(mcpJSON),
-			"--tools", "default,mcp",
 			"--dangerously-skip-permissions",
 			"--model", model,
 			"--name", fmt.Sprintf("p-do-%s-%s", projectName, listName),
