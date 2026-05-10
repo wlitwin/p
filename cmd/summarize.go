@@ -50,7 +50,7 @@ Example:
 			Mode:        ai.ModeAsk,
 		}
 
-		return ai.Run(pBinary, claudePath, model, task)
+		return ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()})
 	},
 }
 

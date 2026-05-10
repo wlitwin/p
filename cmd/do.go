@@ -194,7 +194,7 @@ Add a brief summary of what was implemented to the knowledge base.`, listName),
 		Mode: ai.ModePlan,
 	}
 
-	if err := ai.Run(pBinary, claudePath, model, task); err != nil {
+	if err := ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
 		return err
 	}
 

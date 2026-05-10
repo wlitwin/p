@@ -85,7 +85,7 @@ Use --ai to have the AI agent decide placement and wording.`,
 				ListName:    listName,
 			}
 
-			if err := ai.Run(pBinary, claudePath, model, task); err != nil {
+			if err := ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
 				return err
 			}
 

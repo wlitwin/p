@@ -11,6 +11,7 @@ import (
 )
 
 var cfg config.Config
+var verbose bool
 
 var Version = "dev"
 
@@ -28,7 +29,15 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Show claude subprocess stderr output")
 	cobra.OnInitialize(loadConfig)
+}
+
+func claudeStderr() *os.File {
+	if verbose {
+		return os.Stderr
+	}
+	return nil
 }
 
 func loadConfig() {

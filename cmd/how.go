@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -44,7 +43,7 @@ Examples:
 		}
 
 		claudeCmd := exec.Command(claudePath, claudeArgs...)
-		claudeCmd.Stderr = os.Stderr
+		claudeCmd.Stderr = claudeStderr()
 
 		out, err := claudeCmd.Output()
 		if err != nil {

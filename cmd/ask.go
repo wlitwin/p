@@ -56,7 +56,7 @@ Examples:
 		}
 
 		cont, _ := cmd.Flags().GetBool("continue")
-		return ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Continue: cont})
+		return ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Continue: cont, Stderr: claudeStderr()})
 	},
 }
 
