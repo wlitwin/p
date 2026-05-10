@@ -104,6 +104,11 @@ Examples:
 		}
 
 		// Spawn claude in the code directory
+		initialPrompt := "Implement the tasks described in the system prompt. Start with the highest priority items and work through them methodically."
+		if len(itemIDs) > 0 {
+			initialPrompt = fmt.Sprintf("Implement items %s from the %s todo list as described in the system prompt.", strings.Join(itemIDs, ", "), listName)
+		}
+
 		claudeArgs := []string{
 			"--system-prompt", taskDesc,
 			"--mcp-config", string(mcpJSON),
@@ -111,10 +116,11 @@ Examples:
 			"--dangerously-skip-permissions",
 			"--model", model,
 			"--name", fmt.Sprintf("p-do-%s-%s", projectName, listName),
+			"-p", initialPrompt,
 		}
 
 		fmt.Fprintf(os.Stderr, "Spawning Claude in %s to work on %s/%s...\n", meta.CodeDir, projectName, listName)
-		fmt.Fprintf(os.Stderr, "Claude will have access to both the code repo and p's project tools.\n\n")
+		fmt.Fprintf(os.Stderr, "Interactive session — you can interrupt or redirect at any time.\n\n")
 
 		claudeCmd := exec.Command(claudePath, claudeArgs...)
 		claudeCmd.Dir = meta.CodeDir
