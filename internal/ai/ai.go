@@ -116,7 +116,7 @@ func Run(pBinary, claudeBinary, model string, task Task, opts ...RunOptions) err
 	args = append(args, "-p", "Use the p MCP tools to complete the task described in the system prompt. Do not ask clarifying questions — make your best judgment.")
 
 	cmd := exec.Command(claudeBinary, args...)
-	cmd.Stderr = nil // suppress claude's stderr warnings
+	cmd.Stderr = os.Stderr
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
