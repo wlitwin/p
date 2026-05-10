@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/glamour"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
@@ -155,7 +156,12 @@ func processStreamLine(line string) {
 				}
 			case "text":
 				if text := strings.TrimSpace(block.Text); text != "" {
-					fmt.Fprintf(os.Stderr, "\n%s\n", text)
+					rendered, err := renderMarkdown(text)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "\n%s\n", text)
+					} else {
+						fmt.Fprint(os.Stderr, rendered)
+					}
 				}
 			}
 		}
@@ -170,6 +176,22 @@ func processStreamLine(line string) {
 			}
 		}
 	}
+}
+
+var mdRenderer *glamour.TermRenderer
+
+func renderMarkdown(text string) (string, error) {
+	if mdRenderer == nil {
+		var err error
+		mdRenderer, err = glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(100),
+		)
+		if err != nil {
+			return "", err
+		}
+	}
+	return mdRenderer.Render(text)
 }
 
 func buildPrompt(task Task) string {
