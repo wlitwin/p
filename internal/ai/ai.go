@@ -226,7 +226,25 @@ func projectContext(task Task) string {
 		fmt.Fprintf(&sb, "### Project description\n\n%s\n\n", meta.Description)
 	}
 
+	// Include recent git history for context
+	gitLog := recentGitLog(task.ProjectDir)
+	if gitLog != "" {
+		sb.WriteString("### Recent changes (git log)\n\n```\n")
+		sb.WriteString(gitLog)
+		sb.WriteString("```\n\n")
+	}
+
 	return sb.String()
+}
+
+func recentGitLog(dir string) string {
+	cmd := exec.Command("git", "log", "--max-count=15", "--format=%h %cr %s")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 func todoInstructions(task Task) string {
