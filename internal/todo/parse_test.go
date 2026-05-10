@@ -1,8 +1,11 @@
 package todo
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseRoundTrip(t *testing.T) {
@@ -155,5 +158,720 @@ func TestRenderItemDisplay(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "due=2026-06-15") {
 		t.Error("should contain due date")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AddItem tests
+// ---------------------------------------------------------------------------
+
+func TestAddItem(t *testing.T) {
+	list := &List{Title: "Test"}
+	item := AddItem(list, "Write docs", Backlog, "2026-06-01")
+
+	if item.Text != "Write docs" {
+		t.Errorf("Text = %q, want %q", item.Text, "Write docs")
+	}
+	if item.State != Open {
+		t.Errorf("State = %q, want %q", item.State, Open)
+	}
+	if item.Priority != Backlog {
+		t.Errorf("Priority = %q, want %q", item.Priority, Backlog)
+	}
+	if item.Due != "2026-06-01" {
+		t.Errorf("Due = %q, want %q", item.Due, "2026-06-01")
+	}
+	if len(list.Items) != 1 {
+		t.Errorf("len(Items) = %d, want 1", len(list.Items))
+	}
+	if list.Items[0] != item {
+		t.Error("item should be appended to list.Items")
+	}
+}
+
+func TestAddItemDefaults(t *testing.T) {
+	list := &List{Title: "Test"}
+	item := AddItem(list, "Default task", Now, "")
+
+	if item.State != Open {
+		t.Errorf("State = %q, want %q", item.State, Open)
+	}
+	if item.Created == "" {
+		t.Error("Created should be set automatically")
+	}
+	// Created should be today's date in YYYY-MM-DD format
+	today := time.Now().UTC().Format("2006-01-02")
+	if item.Created != today {
+		t.Errorf("Created = %q, want %q", item.Created, today)
+	}
+	if item.Due != "" {
+		t.Errorf("Due = %q, want empty", item.Due)
+	}
+	if item.DoneDate != "" {
+		t.Errorf("DoneDate = %q, want empty", item.DoneDate)
+	}
+	if len(item.Tags) != 0 {
+		t.Errorf("Tags = %v, want empty", item.Tags)
+	}
+	if len(item.Children) != 0 {
+		t.Errorf("Children = %v, want empty", item.Children)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RemoveItem tests
+// ---------------------------------------------------------------------------
+
+func TestRemoveItemByID(t *testing.T) {
+	list := &List{Title: "Test"}
+	AddItem(list, "First", Now, "")
+	AddItem(list, "Second", Now, "")
+	AddItem(list, "Third", Now, "")
+
+	if err := RemoveItem(list, "2"); err != nil {
+		t.Fatalf("RemoveItem(2) error: %v", err)
+	}
+
+	if len(list.Items) != 2 {
+		t.Fatalf("len(Items) = %d, want 2", len(list.Items))
+	}
+	if list.Items[0].Text != "First" {
+		t.Errorf("Items[0].Text = %q, want %q", list.Items[0].Text, "First")
+	}
+	if list.Items[1].Text != "Third" {
+		t.Errorf("Items[1].Text = %q, want %q", list.Items[1].Text, "Third")
+	}
+}
+
+func TestRemoveNestedItem(t *testing.T) {
+	list := &List{Title: "Test"}
+	parent := AddItem(list, "Parent", Now, "")
+	parent.Children = []*Item{
+		{Text: "Child A", State: Open, Priority: Now},
+		{Text: "Child B", State: Open, Priority: Now},
+		{Text: "Child C", State: Open, Priority: Now},
+	}
+
+	if err := RemoveItem(list, "1.2"); err != nil {
+		t.Fatalf("RemoveItem(1.2) error: %v", err)
+	}
+
+	if len(parent.Children) != 2 {
+		t.Fatalf("len(Children) = %d, want 2", len(parent.Children))
+	}
+	if parent.Children[0].Text != "Child A" {
+		t.Errorf("Children[0].Text = %q, want %q", parent.Children[0].Text, "Child A")
+	}
+	if parent.Children[1].Text != "Child C" {
+		t.Errorf("Children[1].Text = %q, want %q", parent.Children[1].Text, "Child C")
+	}
+	// Parent should still exist
+	if len(list.Items) != 1 {
+		t.Errorf("len(Items) = %d, want 1", len(list.Items))
+	}
+}
+
+func TestRemoveItemInvalidID(t *testing.T) {
+	list := &List{Title: "Test"}
+	AddItem(list, "Only item", Now, "")
+
+	tests := []string{"0", "99", "abc", "1.5", ""}
+	for _, id := range tests {
+		err := RemoveItem(list, id)
+		if err == nil {
+			t.Errorf("RemoveItem(%q) should error, got nil", id)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetState tests
+// ---------------------------------------------------------------------------
+
+func TestSetStateDone(t *testing.T) {
+	item := &Item{Text: "Task", State: Open, Priority: Now}
+	SetState(item, Done)
+
+	if item.State != Done {
+		t.Errorf("State = %q, want %q", item.State, Done)
+	}
+	if item.DoneDate == "" {
+		t.Error("DoneDate should be set when state is Done")
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	if item.DoneDate != today {
+		t.Errorf("DoneDate = %q, want %q", item.DoneDate, today)
+	}
+}
+
+func TestSetStateOpen(t *testing.T) {
+	item := &Item{Text: "Task", State: Done, Priority: Now, DoneDate: "2026-05-09"}
+	SetState(item, Open)
+
+	if item.State != Open {
+		t.Errorf("State = %q, want %q", item.State, Open)
+	}
+	if item.DoneDate != "" {
+		t.Errorf("DoneDate = %q, want empty", item.DoneDate)
+	}
+}
+
+func TestSetStateWithRecur(t *testing.T) {
+	item := &Item{
+		Text:     "Standup",
+		State:    Open,
+		Priority: Now,
+		Due:      time.Now().UTC().Format("2006-01-02"),
+		Recur:    "daily",
+	}
+	SetState(item, Done)
+
+	// Recurring items stay open
+	if item.State != Open {
+		t.Errorf("State = %q, want %q (recurring should stay open)", item.State, Open)
+	}
+	// Due should advance by 1 day
+	expected := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
+	if item.Due != expected {
+		t.Errorf("Due = %q, want %q", item.Due, expected)
+	}
+	// DoneDate should still be set
+	if item.DoneDate == "" {
+		t.Error("DoneDate should be set even for recurring items")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DeepCopyItem tests
+// ---------------------------------------------------------------------------
+
+func TestDeepCopyItem(t *testing.T) {
+	original := &Item{
+		Text:     "Parent",
+		State:    Open,
+		Priority: Now,
+		Due:      "2026-06-01",
+		Created:  "2026-05-10",
+		Tags:     []string{"urgent", "backend"},
+		Recur:    "weekly",
+		Children: []*Item{
+			{Text: "Child 1", State: Open, Priority: Now, Tags: []string{"sub"}},
+			{Text: "Child 2", State: Done, Priority: Backlog},
+		},
+	}
+
+	cp := DeepCopyItem(original)
+
+	// Verify copy matches
+	if cp.Text != original.Text {
+		t.Errorf("copy.Text = %q, want %q", cp.Text, original.Text)
+	}
+	if cp.Due != original.Due {
+		t.Errorf("copy.Due = %q, want %q", cp.Due, original.Due)
+	}
+	if len(cp.Tags) != 2 {
+		t.Fatalf("copy.Tags len = %d, want 2", len(cp.Tags))
+	}
+	if len(cp.Children) != 2 {
+		t.Fatalf("copy.Children len = %d, want 2", len(cp.Children))
+	}
+
+	// Modify original, verify copy is unchanged
+	original.Text = "Modified Parent"
+	original.Tags[0] = "changed"
+	original.Children[0].Text = "Modified Child"
+
+	if cp.Text != "Parent" {
+		t.Errorf("copy.Text = %q after original modification, want %q", cp.Text, "Parent")
+	}
+	if cp.Tags[0] != "urgent" {
+		t.Errorf("copy.Tags[0] = %q after original modification, want %q", cp.Tags[0], "urgent")
+	}
+	if cp.Children[0].Text != "Child 1" {
+		t.Errorf("copy.Children[0].Text = %q after original modification, want %q", cp.Children[0].Text, "Child 1")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Metadata parsing tests
+// ---------------------------------------------------------------------------
+
+func TestParseMetadataTags(t *testing.T) {
+	input := `---
+title: Tagged
+---
+
+# Tagged
+
+- [ ] Task with tags priority=now tags=frontend,urgent created=2026-05-10
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("got %d items, want 1", len(list.Items))
+	}
+	item := list.Items[0]
+	if len(item.Tags) != 2 {
+		t.Fatalf("Tags len = %d, want 2", len(item.Tags))
+	}
+	if item.Tags[0] != "frontend" {
+		t.Errorf("Tags[0] = %q, want %q", item.Tags[0], "frontend")
+	}
+	if item.Tags[1] != "urgent" {
+		t.Errorf("Tags[1] = %q, want %q", item.Tags[1], "urgent")
+	}
+}
+
+func TestParseMetadataRecur(t *testing.T) {
+	input := `---
+title: Recurring
+---
+
+# Recurring
+
+- [ ] Daily standup priority=now due=2026-05-10 recur=weekly created=2026-05-01
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("got %d items, want 1", len(list.Items))
+	}
+	if list.Items[0].Recur != "weekly" {
+		t.Errorf("Recur = %q, want %q", list.Items[0].Recur, "weekly")
+	}
+}
+
+func TestParseMetadataDoneDate(t *testing.T) {
+	input := `---
+title: Done
+---
+
+# Done
+
+- [x] Completed task priority=now created=2026-05-08 done=2026-05-10
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("got %d items, want 1", len(list.Items))
+	}
+	item := list.Items[0]
+	if item.State != Done {
+		t.Errorf("State = %q, want %q", item.State, Done)
+	}
+	if item.DoneDate != "2026-05-10" {
+		t.Errorf("DoneDate = %q, want %q", item.DoneDate, "2026-05-10")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Edge case tests
+// ---------------------------------------------------------------------------
+
+func TestParseEmptyList(t *testing.T) {
+	input := `---
+title: Empty
+created: 2026-05-10T12:00:00Z
+updated: 2026-05-10T12:00:00Z
+---
+
+# Empty
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if list.Title != "Empty" {
+		t.Errorf("Title = %q, want %q", list.Title, "Empty")
+	}
+	if len(list.Items) != 0 {
+		t.Errorf("len(Items) = %d, want 0", len(list.Items))
+	}
+}
+
+func TestParseMalformedMarkdown(t *testing.T) {
+	inputs := []string{
+		"",
+		"just plain text",
+		"---\nno closing frontmatter",
+		"# No frontmatter heading\nsome content\n",
+		"---\n---\n\nno items here, just text\n\nparagraph two",
+		"random\n\n\tbytes\x00\x01\x02",
+	}
+
+	for i, input := range inputs {
+		list, err := Parse(input)
+		if err != nil {
+			t.Errorf("input[%d]: Parse should not error, got: %v", i, err)
+		}
+		if list == nil {
+			t.Errorf("input[%d]: list should not be nil", i)
+		}
+	}
+}
+
+func TestParseDeeplyNestedItems(t *testing.T) {
+	input := `---
+title: Deep
+---
+
+# Deep
+
+- [ ] Level 1 priority=now created=2026-05-10
+  - [ ] Level 2 priority=now created=2026-05-10
+    - [ ] Level 3 priority=now created=2026-05-10
+      - [ ] Level 4 priority=now created=2026-05-10
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(list.Items) != 1 {
+		t.Fatalf("got %d top-level items, want 1", len(list.Items))
+	}
+
+	level1 := list.Items[0]
+	if level1.Text != "Level 1" {
+		t.Errorf("Level 1 text = %q", level1.Text)
+	}
+	if len(level1.Children) != 1 {
+		t.Fatalf("Level 1 children = %d, want 1", len(level1.Children))
+	}
+
+	level2 := level1.Children[0]
+	if level2.Text != "Level 2" {
+		t.Errorf("Level 2 text = %q", level2.Text)
+	}
+	if len(level2.Children) != 1 {
+		t.Fatalf("Level 2 children = %d, want 1", len(level2.Children))
+	}
+
+	level3 := level2.Children[0]
+	if level3.Text != "Level 3" {
+		t.Errorf("Level 3 text = %q", level3.Text)
+	}
+	if len(level3.Children) != 1 {
+		t.Fatalf("Level 3 children = %d, want 1", len(level3.Children))
+	}
+
+	level4 := level3.Children[0]
+	if level4.Text != "Level 4" {
+		t.Errorf("Level 4 text = %q", level4.Text)
+	}
+
+	// Verify ResolveItem works with deep nesting
+	resolved, err := ResolveItem(list, "1.1.1.1")
+	if err != nil {
+		t.Fatalf("ResolveItem(1.1.1.1) error: %v", err)
+	}
+	if resolved.Text != "Level 4" {
+		t.Errorf("ResolveItem(1.1.1.1) = %q, want %q", resolved.Text, "Level 4")
+	}
+}
+
+func TestParseUnicodeText(t *testing.T) {
+	input := `---
+title: Unicode Tasks
+---
+
+# Unicode Tasks
+
+- [ ] Deploy to production priority=now created=2026-05-10
+- [ ] Fix Nachricht-Encoding priority=now created=2026-05-10
+- [ ] Review by Tanaka-san priority=backlog created=2026-05-10
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(list.Items) != 3 {
+		t.Fatalf("got %d items, want 3", len(list.Items))
+	}
+
+	expected := []string{
+		"Deploy to production",
+		"Fix Nachricht-Encoding",
+		"Review by Tanaka-san",
+	}
+	for i, want := range expected {
+		if list.Items[i].Text != want {
+			t.Errorf("Items[%d].Text = %q, want %q", i, list.Items[i].Text, want)
+		}
+	}
+
+	// Round-trip through Render/Parse
+	rendered := Render(list)
+	reparsed, err := Parse(rendered)
+	if err != nil {
+		t.Fatalf("re-Parse error: %v", err)
+	}
+	for i, want := range expected {
+		if reparsed.Items[i].Text != want {
+			t.Errorf("after round-trip Items[%d].Text = %q, want %q", i, reparsed.Items[i].Text, want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// List management tests (filesystem)
+// ---------------------------------------------------------------------------
+
+func TestListDir(t *testing.T) {
+	got := ListDir("/some/project")
+	want := filepath.Join("/some/project", "todos")
+	if got != want {
+		t.Errorf("ListDir = %q, want %q", got, want)
+	}
+}
+
+func TestListPath(t *testing.T) {
+	got := ListPath("/some/project", "sprint-1")
+	want := filepath.Join("/some/project", "todos", "sprint-1.md")
+	if got != want {
+		t.Errorf("ListPath = %q, want %q", got, want)
+	}
+}
+
+func TestCreateList(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	list, err := CreateList(dir, "backlog", "Backlog Items")
+	if err != nil {
+		t.Fatalf("CreateList error: %v", err)
+	}
+	if list.Title != "Backlog Items" {
+		t.Errorf("Title = %q, want %q", list.Title, "Backlog Items")
+	}
+
+	// File should exist
+	path := ListPath(dir, "backlog")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Error("list file should exist on disk")
+	}
+}
+
+func TestCreateListDuplicate(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	_, err := CreateList(dir, "backlog", "Backlog")
+	if err != nil {
+		t.Fatalf("first CreateList error: %v", err)
+	}
+
+	_, err = CreateList(dir, "backlog", "Backlog Again")
+	if err == nil {
+		t.Error("duplicate CreateList should error")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("error = %q, should contain 'already exists'", err.Error())
+	}
+}
+
+func TestLoadSaveList(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	original := &List{
+		Title:   "Round Trip",
+		Created: time.Now().UTC(),
+	}
+	AddItem(original, "Task A", Now, "2026-06-01")
+	AddItem(original, "Task B", Backlog, "")
+
+	err := SaveList(dir, "roundtrip", original)
+	if err != nil {
+		t.Fatalf("SaveList error: %v", err)
+	}
+
+	loaded, err := LoadList(dir, "roundtrip")
+	if err != nil {
+		t.Fatalf("LoadList error: %v", err)
+	}
+
+	if loaded.Title != "Round Trip" {
+		t.Errorf("Title = %q, want %q", loaded.Title, "Round Trip")
+	}
+	if len(loaded.Items) != 2 {
+		t.Fatalf("len(Items) = %d, want 2", len(loaded.Items))
+	}
+	if loaded.Items[0].Text != "Task A" {
+		t.Errorf("Items[0].Text = %q, want %q", loaded.Items[0].Text, "Task A")
+	}
+	if loaded.Items[0].Due != "2026-06-01" {
+		t.Errorf("Items[0].Due = %q, want %q", loaded.Items[0].Due, "2026-06-01")
+	}
+	if loaded.Items[1].Text != "Task B" {
+		t.Errorf("Items[1].Text = %q, want %q", loaded.Items[1].Text, "Task B")
+	}
+	if loaded.Items[1].Priority != Backlog {
+		t.Errorf("Items[1].Priority = %q, want %q", loaded.Items[1].Priority, Backlog)
+	}
+}
+
+func TestListNames(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	_, _ = CreateList(dir, "alpha", "Alpha")
+	_, _ = CreateList(dir, "beta", "Beta")
+	_, _ = CreateList(dir, "gamma", "Gamma")
+
+	names, err := ListNames(dir)
+	if err != nil {
+		t.Fatalf("ListNames error: %v", err)
+	}
+
+	if len(names) != 3 {
+		t.Fatalf("len(names) = %d, want 3", len(names))
+	}
+
+	// Names are returned from ReadDir which gives sorted order
+	want := []string{"alpha", "beta", "gamma"}
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("names[%d] = %q, want %q", i, names[i], w)
+		}
+	}
+}
+
+func TestListNamesEmpty(t *testing.T) {
+	dir := t.TempDir()
+	// No todos dir yet - should return nil, nil
+	names, err := ListNames(dir)
+	if err != nil {
+		t.Fatalf("ListNames error: %v", err)
+	}
+	if names != nil {
+		t.Errorf("names = %v, want nil for non-existent dir", names)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Recurrence tests (testing nextDueDate indirectly via SetState)
+// ---------------------------------------------------------------------------
+
+func TestNextDueDateDaily(t *testing.T) {
+	item := &Item{
+		Text:     "Daily standup",
+		State:    Open,
+		Priority: Now,
+		Due:      time.Now().UTC().Format("2006-01-02"),
+		Recur:    "daily",
+	}
+	SetState(item, Done)
+
+	if item.State != Open {
+		t.Errorf("State = %q, want %q", item.State, Open)
+	}
+
+	expected := time.Now().UTC().AddDate(0, 0, 1).Format("2006-01-02")
+	if item.Due != expected {
+		t.Errorf("Due = %q, want %q", item.Due, expected)
+	}
+}
+
+func TestNextDueDateWeekly(t *testing.T) {
+	item := &Item{
+		Text:     "Weekly review",
+		State:    Open,
+		Priority: Now,
+		Due:      time.Now().UTC().Format("2006-01-02"),
+		Recur:    "weekly",
+	}
+	SetState(item, Done)
+
+	if item.State != Open {
+		t.Errorf("State = %q, want %q", item.State, Open)
+	}
+
+	expected := time.Now().UTC().AddDate(0, 0, 7).Format("2006-01-02")
+	if item.Due != expected {
+		t.Errorf("Due = %q, want %q", item.Due, expected)
+	}
+}
+
+func TestNextDueDateMonthly(t *testing.T) {
+	item := &Item{
+		Text:     "Monthly report",
+		State:    Open,
+		Priority: Now,
+		Due:      time.Now().UTC().Format("2006-01-02"),
+		Recur:    "monthly",
+	}
+	SetState(item, Done)
+
+	if item.State != Open {
+		t.Errorf("State = %q, want %q", item.State, Open)
+	}
+
+	expected := time.Now().UTC().AddDate(0, 1, 0).Format("2006-01-02")
+	if item.Due != expected {
+		t.Errorf("Due = %q, want %q", item.Due, expected)
+	}
+}
+
+func TestSetStateRecurringCreatesNewDue(t *testing.T) {
+	item := &Item{
+		Text:     "Sprint planning",
+		State:    Open,
+		Priority: Now,
+		Due:      time.Now().UTC().Format("2006-01-02"),
+		Recur:    "weekly",
+	}
+
+	originalDue := item.Due
+	SetState(item, Done)
+
+	if item.State != Open {
+		t.Errorf("State = %q, want %q after recurring done", item.State, Open)
+	}
+	if item.Due == originalDue {
+		t.Error("Due should have changed after completing recurring item")
+	}
+	if item.DoneDate == "" {
+		t.Error("DoneDate should be set after completing recurring item")
+	}
+
+	// Complete it again - due should advance again
+	prevDue := item.Due
+	SetState(item, Done)
+	if item.Due == prevDue {
+		t.Error("Due should advance on each completion")
+	}
+	if item.State != Open {
+		t.Errorf("State = %q, want %q after second recurring done", item.State, Open)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ParseState tests
+// ---------------------------------------------------------------------------
+
+func TestParseState(t *testing.T) {
+	tests := []struct {
+		marker string
+		want   State
+	}{
+		{"[x]", Done},
+		{"[-]", Blocked},
+		{"[ ]", Open},
+		{"[?]", Open}, // unknown defaults to Open
+		{"", Open},    // empty defaults to Open
+		{"xyz", Open}, // garbage defaults to Open
+	}
+
+	for _, tt := range tests {
+		got := ParseState(tt.marker)
+		if got != tt.want {
+			t.Errorf("ParseState(%q) = %q, want %q", tt.marker, got, tt.want)
+		}
 	}
 }

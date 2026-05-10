@@ -246,3 +246,385 @@ func TestTodoMove(t *testing.T) {
 		t.Errorf("moved item text = %q", dstList.Items[0].Text)
 	}
 }
+
+// callToolAllowError calls a handler and returns the text result plus whether it was an error.
+// Unlike callTool, it does not fatal on tool-level errors (IsError=true).
+func callToolAllowError(t *testing.T, ctx *serverCtx, handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error), args map[string]any) (string, bool) {
+	t.Helper()
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = args
+	result, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handler error: %v", err)
+	}
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			return tc.Text, result.IsError
+		}
+	}
+	return "", result.IsError
+}
+
+// --- Missing handler tests ---
+
+func TestTodoUpdate(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	callTool(t, ctx, ctx.handleTodoUpdate, map[string]any{
+		"project": "test-project",
+		"list":    "tasks",
+		"item_id": "1",
+		"text":    "Updated first task",
+	})
+
+	dir := filepath.Join(root, "test-project")
+	list, _ := todo.LoadList(dir, "tasks")
+	if list.Items[0].Text != "Updated first task" {
+		t.Errorf("expected updated text, got %q", list.Items[0].Text)
+	}
+}
+
+func TestKnowledgeReplace(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+	dir := filepath.Join(root, "test-project")
+
+	// The "overview" doc created by setupTestRoot has a section "# Overview".
+	// Append a subsection so we can replace it.
+	knowledge.Append(dir, "overview", "## Details\n\nOld details content.", "")
+
+	callTool(t, ctx, ctx.handleKnowledgeReplace, map[string]any{
+		"project":  "test-project",
+		"filename": "overview",
+		"section":  "Details",
+		"content":  "New details content.",
+	})
+
+	content, _ := knowledge.Read(dir, "overview")
+	if strings.Contains(content, "Old details content") {
+		t.Errorf("old content should be gone, got:\n%s", content)
+	}
+	if !strings.Contains(content, "New details content.") {
+		t.Errorf("new content should be present, got:\n%s", content)
+	}
+}
+
+func TestKnowledgeRename(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	callTool(t, ctx, ctx.handleKnowledgeRename, map[string]any{
+		"project":      "test-project",
+		"old_filename": "overview",
+		"new_filename": "architecture",
+	})
+
+	dir := filepath.Join(root, "test-project")
+
+	// Old name should not exist
+	oldPath := knowledge.FilePath(dir, "overview")
+	if _, err := os.Stat(oldPath); err == nil {
+		t.Error("old file should not exist after rename")
+	}
+
+	// New name should exist
+	content, err := knowledge.Read(dir, "architecture")
+	if err != nil {
+		t.Fatalf("reading renamed doc: %v", err)
+	}
+	if !strings.Contains(content, "overview content") {
+		t.Errorf("renamed doc should preserve content, got:\n%s", content)
+	}
+}
+
+func TestTodoPriority(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// Item 1 starts with priority=now, change to backlog
+	callTool(t, ctx, ctx.handleTodoPriority, map[string]any{
+		"project":  "test-project",
+		"list":     "tasks",
+		"item_id":  "1",
+		"priority": "backlog",
+	})
+
+	dir := filepath.Join(root, "test-project")
+	list, _ := todo.LoadList(dir, "tasks")
+	if list.Items[0].Priority != todo.Backlog {
+		t.Errorf("expected backlog priority, got %s", list.Items[0].Priority)
+	}
+}
+
+func TestTodoDue(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	callTool(t, ctx, ctx.handleTodoDue, map[string]any{
+		"project": "test-project",
+		"list":    "tasks",
+		"item_id": "1",
+		"due":     "2026-12-31",
+	})
+
+	dir := filepath.Join(root, "test-project")
+	list, _ := todo.LoadList(dir, "tasks")
+	if list.Items[0].Due != "2026-12-31" {
+		t.Errorf("expected due 2026-12-31, got %q", list.Items[0].Due)
+	}
+}
+
+func TestTodoRmList(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	callTool(t, ctx, ctx.handleTodoRmList, map[string]any{
+		"project": "test-project",
+		"list":    "tasks",
+	})
+
+	dir := filepath.Join(root, "test-project")
+	path := todo.ListPath(dir, "tasks")
+	if _, err := os.Stat(path); err == nil {
+		t.Error("todo list file should be deleted")
+	}
+}
+
+func TestKnowledgeList(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text := callTool(t, ctx, ctx.handleKnowledgeList, map[string]any{
+		"project": "test-project",
+	})
+
+	if !strings.Contains(text, "overview") {
+		t.Errorf("expected 'overview' in list output: %s", text)
+	}
+	if !strings.Contains(text, "bytes") {
+		t.Errorf("expected size in bytes in output: %s", text)
+	}
+}
+
+func TestKnowledgeSearch(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// The overview doc contains "overview content" — search for it
+	text := callTool(t, ctx, ctx.handleKnowledgeSearch, map[string]any{
+		"project": "test-project",
+		"query":   "overview content",
+	})
+
+	if !strings.Contains(text, "overview") {
+		t.Errorf("expected overview in search results: %s", text)
+	}
+
+	// Search for something that doesn't exist
+	text = callTool(t, ctx, ctx.handleKnowledgeSearch, map[string]any{
+		"project": "test-project",
+		"query":   "xyznonexistent",
+	})
+	if !strings.Contains(text, "No matches") {
+		t.Errorf("expected no matches: %s", text)
+	}
+}
+
+func TestStatus(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// Status for a specific project
+	text := callTool(t, ctx, ctx.handleStatus, map[string]any{
+		"project": "test-project",
+	})
+
+	if !strings.Contains(text, "test-project") {
+		t.Errorf("expected project name in status: %s", text)
+	}
+	if !strings.Contains(text, "open=") {
+		t.Errorf("expected open count in status: %s", text)
+	}
+
+	// Status for all projects (no project param)
+	text = callTool(t, ctx, ctx.handleStatus, map[string]any{})
+	if !strings.Contains(text, "test-project") {
+		t.Errorf("expected project name in all-project status: %s", text)
+	}
+}
+
+func TestSearch(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// Search for known todo text
+	text := callTool(t, ctx, ctx.handleSearch, map[string]any{
+		"query":   "First task",
+		"project": "test-project",
+	})
+	if !strings.Contains(text, "First task") {
+		t.Errorf("expected 'First task' in search results: %s", text)
+	}
+
+	// Search for known knowledge content
+	text = callTool(t, ctx, ctx.handleSearch, map[string]any{
+		"query":   "overview content",
+		"project": "test-project",
+	})
+	if !strings.Contains(text, "overview") {
+		t.Errorf("expected 'overview' in search results: %s", text)
+	}
+
+	// Search with no matches
+	text = callTool(t, ctx, ctx.handleSearch, map[string]any{
+		"query":   "absolutelynothingtofind",
+		"project": "test-project",
+	})
+	if !strings.Contains(text, "No matches") {
+		t.Errorf("expected 'No matches' for empty search: %s", text)
+	}
+}
+
+// --- Error case tests ---
+
+func TestTodoAddMissingParams(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// Empty project
+	text, isErr := callToolAllowError(t, ctx, ctx.handleTodoAdd, map[string]any{
+		"project": "",
+		"list":    "tasks",
+		"text":    "some task",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty project, got: %s", text)
+	}
+
+	// Empty list
+	text, isErr = callToolAllowError(t, ctx, ctx.handleTodoAdd, map[string]any{
+		"project": "test-project",
+		"list":    "",
+		"text":    "some task",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty list, got: %s", text)
+	}
+
+	// Empty text
+	text, isErr = callToolAllowError(t, ctx, ctx.handleTodoAdd, map[string]any{
+		"project": "test-project",
+		"list":    "tasks",
+		"text":    "",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty text, got: %s", text)
+	}
+}
+
+func TestTodoStateMissingParams(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleTodoState, map[string]any{
+		"project": "",
+		"list":    "",
+		"item_id": "",
+		"state":   "",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty params, got: %s", text)
+	}
+}
+
+func TestTodoStateInvalidState(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleTodoState, map[string]any{
+		"project": "test-project",
+		"list":    "tasks",
+		"item_id": "1",
+		"state":   "invalid",
+	})
+	if !isErr {
+		t.Errorf("expected error for invalid state, got: %s", text)
+	}
+	if !strings.Contains(text, "invalid") {
+		t.Errorf("expected error message to mention invalid state: %s", text)
+	}
+}
+
+func TestTodoRemoveMissingParams(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleTodoRemove, map[string]any{
+		"project": "",
+		"list":    "",
+		"item_id": "",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty params, got: %s", text)
+	}
+}
+
+func TestTodoUpdateMissingParams(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleTodoUpdate, map[string]any{
+		"project": "",
+		"list":    "",
+		"item_id": "",
+		"text":    "",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty params, got: %s", text)
+	}
+}
+
+func TestKnowledgeCreateMissingParams(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleKnowledgeCreate, map[string]any{
+		"project":  "",
+		"filename": "",
+		"title":    "",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty params, got: %s", text)
+	}
+}
+
+func TestTodoAddInvalidProject(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleTodoAdd, map[string]any{
+		"project": "nonexistent-project",
+		"list":    "tasks",
+		"text":    "some task",
+	})
+	if !isErr {
+		t.Errorf("expected error for nonexistent project, got: %s", text)
+	}
+}
+
+func TestTodoResolveInvalidID(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// The list has only 2 items, so item_id=99 should fail
+	text, isErr := callToolAllowError(t, ctx, ctx.handleTodoState, map[string]any{
+		"project": "test-project",
+		"list":    "tasks",
+		"item_id": "99",
+		"state":   "done",
+	})
+	if !isErr {
+		t.Errorf("expected error for invalid item ID, got: %s", text)
+	}
+}
