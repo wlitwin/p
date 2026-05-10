@@ -117,13 +117,9 @@ Examples:
 		}
 
 		// Spawn claude in the code directory
-		var initialPrompt string
+		// Fold user message into system prompt so Claude has full context
 		if userMessage != "" {
-			initialPrompt = userMessage
-		} else if len(itemIDs) > 0 {
-			initialPrompt = fmt.Sprintf("Implement items %s from the %s todo list as described in the system prompt.", strings.Join(itemIDs, ", "), listName)
-		} else {
-			initialPrompt = "Implement the tasks described in the system prompt. Start with the highest priority items and work through them methodically."
+			taskDesc += "\n## Additional instructions from user\n\n" + userMessage + "\n"
 		}
 
 		claudeArgs := []string{
@@ -133,11 +129,9 @@ Examples:
 			"--dangerously-skip-permissions",
 			"--model", model,
 			"--name", fmt.Sprintf("p-do-%s-%s", projectName, listName),
-			"-p", initialPrompt,
 		}
 
 		fmt.Fprintf(os.Stderr, "Spawning Claude in %s to work on %s/%s...\n", meta.CodeDir, projectName, listName)
-		fmt.Fprintf(os.Stderr, "Interactive session — you can interrupt or redirect at any time.\n\n")
 
 		claudeCmd := exec.Command(claudePath, claudeArgs...)
 		claudeCmd.Dir = meta.CodeDir
