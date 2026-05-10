@@ -27,6 +27,7 @@ const (
 	ModeTodo      Mode = "todo"
 	ModeKnowledge Mode = "knowledge"
 	ModePlan      Mode = "plan"
+	ModeAsk       Mode = "ask"
 )
 
 type mcpConfig struct {
@@ -180,6 +181,8 @@ func buildPrompt(task Task) string {
 		sb.WriteString(knowledgeInstructions(task))
 	case ModePlan:
 		sb.WriteString(planInstructions(task))
+	case ModeAsk:
+		sb.WriteString(askInstructions(task))
 	}
 
 	return sb.String()
@@ -265,6 +268,23 @@ func planInstructions(task Task) string {
 	sb.WriteString("- Use [[wiki links]] to connect todos to relevant knowledge docs.\n")
 	sb.WriteString("- If the task involves planning, consider creating a knowledge doc that captures the overall plan, then individual todos for execution.\n")
 	sb.WriteString("- Think step by step about what needs to happen and break it down into concrete tasks.\n")
+
+	return sb.String()
+}
+
+func askInstructions(task Task) string {
+	var sb strings.Builder
+
+	fmt.Fprintf(&sb, "The user has a question about this project:\n\n> %s\n\n", task.Input)
+
+	sb.WriteString("This is a READ-ONLY query. Do NOT create, modify, or delete any todos or knowledge docs.\n\n")
+	sb.WriteString("Guidelines:\n")
+	sb.WriteString("- Use `project_list`, `todo_list`, and `knowledge_read` to explore the project.\n")
+	sb.WriteString("- Answer the question based on the current project state.\n")
+	sb.WriteString("- Be specific — reference actual todo items, lists, and knowledge docs by name.\n")
+	sb.WriteString("- If the question is about progress, summarize what's done vs. open vs. blocked.\n")
+	sb.WriteString("- If the question is about gaps or risks, analyze the current state critically.\n")
+	sb.WriteString("- Keep your answer concise and actionable.\n")
 
 	return sb.String()
 }
