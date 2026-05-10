@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -61,17 +62,29 @@ Examples:
 		// Determine which items to work on
 		var listName string
 		var itemIDs []string
+		var userMessage string
 
 		if len(args) >= 2 {
 			listName = args[1]
-			if len(args) >= 3 {
-				itemIDs = args[2:]
+			for _, arg := range args[2:] {
+				if looksLikeItemID(arg) {
+					itemIDs = append(itemIDs, arg)
+				} else {
+					userMessage = strings.Join(args[2:], " ")
+					itemIDs = nil
+					break
+				}
 			}
 		} else {
 			listName, err = pickList(dir)
 			if err != nil {
 				return err
 			}
+		}
+
+		// Also check --message flag
+		if msg, _ := cmd.Flags().GetString("message"); msg != "" {
+			userMessage = msg
 		}
 
 		list, err := todo.LoadList(dir, listName)
@@ -104,9 +117,13 @@ Examples:
 		}
 
 		// Spawn claude in the code directory
-		initialPrompt := "Implement the tasks described in the system prompt. Start with the highest priority items and work through them methodically."
-		if len(itemIDs) > 0 {
+		var initialPrompt string
+		if userMessage != "" {
+			initialPrompt = userMessage
+		} else if len(itemIDs) > 0 {
 			initialPrompt = fmt.Sprintf("Implement items %s from the %s todo list as described in the system prompt.", strings.Join(itemIDs, ", "), listName)
+		} else {
+			initialPrompt = "Implement the tasks described in the system prompt. Start with the highest priority items and work through them methodically."
 		}
 
 		claudeArgs := []string{
@@ -226,6 +243,13 @@ Add a brief summary of what was implemented to the knowledge base.`, listName),
 	return nil
 }
 
+var itemIDRe = regexp.MustCompile(`^\d+(\.\d+)*$`)
+
+func looksLikeItemID(s string) bool {
+	return itemIDRe.MatchString(s)
+}
+
 func init() {
+	doCmd.Flags().StringP("message", "m", "", "Custom instructions for the AI")
 	rootCmd.AddCommand(doCmd)
 }
