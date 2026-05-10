@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/walter/p/internal/config"
+	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
@@ -717,5 +719,164 @@ func TestIntegrationExpandHome(t *testing.T) {
 	result = expandHome("/absolute/path")
 	if result != "/absolute/path" {
 		t.Errorf("expandHome('/absolute/path') = %q, should be unchanged", result)
+	}
+}
+
+func configureGitUser(t *testing.T, dir string) {
+	t.Helper()
+	cmd := exec.Command("git", "config", "user.email", "test@test.com")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git config user.email: %v", err)
+	}
+	cmd = exec.Command("git", "config", "user.name", "test")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git config user.name: %v", err)
+	}
+}
+
+func TestIntegrationLogAfterMutations(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "log-proj", "")
+	dir := filepath.Join(root, "log-proj")
+
+	// Init git and configure user
+	if err := git.Init(dir); err != nil {
+		t.Fatalf("git.Init: %v", err)
+	}
+	configureGitUser(t, dir)
+
+	// Add a todo item, save, and commit
+	list, err := todo.CreateList(dir, "tasks", "Tasks")
+	if err != nil {
+		t.Fatalf("CreateList: %v", err)
+	}
+	todo.AddItem(list, "First task", todo.Now, "")
+	todo.SaveList(dir, "tasks", list)
+	if err := git.CommitAll(dir, "Add first task"); err != nil {
+		t.Fatalf("CommitAll 1: %v", err)
+	}
+
+	// Add another item, save, and commit again
+	list, _ = todo.LoadList(dir, "tasks")
+	todo.AddItem(list, "Second task", todo.Backlog, "")
+	todo.SaveList(dir, "tasks", list)
+	if err := git.CommitAll(dir, "Add second task"); err != nil {
+		t.Fatalf("CommitAll 2: %v", err)
+	}
+
+	// Run git log --oneline
+	cmd := exec.Command("git", "log", "--oneline")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git log: %v", err)
+	}
+
+	logOutput := string(out)
+	if !strings.Contains(logOutput, "Add first task") {
+		t.Errorf("git log should contain 'Add first task', got:\n%s", logOutput)
+	}
+	if !strings.Contains(logOutput, "Add second task") {
+		t.Errorf("git log should contain 'Add second task', got:\n%s", logOutput)
+	}
+
+	lines := strings.Split(strings.TrimSpace(logOutput), "\n")
+	if len(lines) < 2 {
+		t.Errorf("expected at least 2 log lines, got %d:\n%s", len(lines), logOutput)
+	}
+}
+
+func TestIntegrationDiffUncommitted(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "diff-proj", "")
+	dir := filepath.Join(root, "diff-proj")
+
+	// Init git and configure user
+	if err := git.Init(dir); err != nil {
+		t.Fatalf("git.Init: %v", err)
+	}
+	configureGitUser(t, dir)
+
+	// Create initial commit with a todo list
+	list, err := todo.CreateList(dir, "tasks", "Tasks")
+	if err != nil {
+		t.Fatalf("CreateList: %v", err)
+	}
+	todo.AddItem(list, "Initial item", todo.Now, "")
+	todo.SaveList(dir, "tasks", list)
+	if err := git.CommitAll(dir, "Initial commit"); err != nil {
+		t.Fatalf("CommitAll: %v", err)
+	}
+
+	// Modify the list (add a new item) but do NOT commit
+	list, _ = todo.LoadList(dir, "tasks")
+	todo.AddItem(list, "Uncommitted item", todo.Backlog, "")
+	todo.SaveList(dir, "tasks", list)
+
+	// git.Diff should return non-empty diff containing the new item text
+	diff, err := git.Diff(dir)
+	if err != nil {
+		t.Fatalf("git.Diff: %v", err)
+	}
+	if diff == "" {
+		t.Error("git.Diff should return non-empty diff for uncommitted changes")
+	}
+	if !strings.Contains(diff, "Uncommitted item") {
+		t.Errorf("diff should contain 'Uncommitted item', got:\n%s", diff)
+	}
+
+	// git.DiffStat should return non-empty stat output
+	stat, err := git.DiffStat(dir)
+	if err != nil {
+		t.Fatalf("git.DiffStat: %v", err)
+	}
+	if stat == "" {
+		t.Error("git.DiffStat should return non-empty stat for uncommitted changes")
+	}
+
+	// Commit and verify Diff returns empty (clean)
+	if err := git.CommitAll(dir, "Commit uncommitted item"); err != nil {
+		t.Fatalf("CommitAll after modify: %v", err)
+	}
+	diff, err = git.Diff(dir)
+	if err != nil {
+		t.Fatalf("git.Diff after commit: %v", err)
+	}
+	if diff != "" {
+		t.Errorf("git.Diff should return empty after commit, got:\n%s", diff)
+	}
+}
+
+func TestIntegrationDiffClean(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "clean-proj", "")
+	dir := filepath.Join(root, "clean-proj")
+
+	// Init git and configure user
+	if err := git.Init(dir); err != nil {
+		t.Fatalf("git.Init: %v", err)
+	}
+	configureGitUser(t, dir)
+
+	// Create and commit a file
+	list, err := todo.CreateList(dir, "tasks", "Tasks")
+	if err != nil {
+		t.Fatalf("CreateList: %v", err)
+	}
+	todo.AddItem(list, "Committed item", todo.Now, "")
+	todo.SaveList(dir, "tasks", list)
+	if err := git.CommitAll(dir, "Initial commit"); err != nil {
+		t.Fatalf("CommitAll: %v", err)
+	}
+
+	// DiffStat should return empty on clean working tree
+	stat, err := git.DiffStat(dir)
+	if err != nil {
+		t.Fatalf("git.DiffStat: %v", err)
+	}
+	if stat != "" {
+		t.Errorf("git.DiffStat should return empty on clean tree, got:\n%s", stat)
 	}
 }
