@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"os"
+	"regexp"
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/knowledge"
@@ -144,6 +145,23 @@ func filterItems(items []*todo.Item, state, priority, tag string) []*todo.Item {
 	return result
 }
 
+func dimTextPreservingLinks(text string) string {
+	// Dim text segments between wiki links, leaving [[...]] untouched for later rendering
+	parts := wikiLinkSplit.Split(text, -1)
+	links := wikiLinkSplit.FindAllString(text, -1)
+
+	var result string
+	for i, part := range parts {
+		result += tui.Dim.Render(part)
+		if i < len(links) {
+			result += links[i]
+		}
+	}
+	return result
+}
+
+var wikiLinkSplit = regexp.MustCompile(`\[\[[^\]]+\]\]`)
+
 func hasTag(item *todo.Item, tag string) bool {
 	for _, t := range item.Tags {
 		if t == tag {
@@ -184,11 +202,11 @@ func printItems(items []*todo.Item, prefix string, start int, projectDir ...stri
 		}
 
 		text := item.Text
+		if item.State == todo.Done {
+			text = dimTextPreservingLinks(text)
+		}
 		if dir != "" {
 			text = tui.RenderWikiLinks(text, dir)
-		}
-		if item.State == todo.Done {
-			text = tui.Dim.Render(text)
 		}
 
 		fmt.Printf("  %s %s %s%s\n", styledID, styledMarker, text, meta)
