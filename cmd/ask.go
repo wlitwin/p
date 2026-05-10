@@ -55,10 +55,12 @@ Examples:
 			Mode:        ai.ModeAsk,
 		}
 
-		return ai.Run(pBinary, claudePath, model, task)
+		cont, _ := cmd.Flags().GetBool("continue")
+		return ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Continue: cont})
 	},
 }
 
 func init() {
+	askCmd.Flags().BoolP("continue", "c", false, "Continue the previous conversation")
 	rootCmd.AddCommand(askCmd)
 }

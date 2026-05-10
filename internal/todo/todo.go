@@ -31,6 +31,7 @@ type Item struct {
 	Created  string
 	DoneDate string
 	Tags     []string
+	Recur    string
 	Children []*Item
 }
 
@@ -178,10 +179,38 @@ func RemoveItem(list *List, id string) error {
 }
 
 func SetState(item *Item, state State) {
+	if state == Done && item.Recur != "" {
+		// Recurring task: mark done but immediately reopen
+		item.DoneDate = time.Now().UTC().Format("2006-01-02")
+		item.State = Open
+		item.Due = nextDueDate(item.Recur, item.Due)
+		return
+	}
+
 	item.State = state
 	if state == Done {
 		item.DoneDate = time.Now().UTC().Format("2006-01-02")
 	} else {
 		item.DoneDate = ""
+	}
+}
+
+func nextDueDate(recur, currentDue string) string {
+	base := time.Now().UTC()
+	if currentDue != "" {
+		if t, err := time.Parse("2006-01-02", currentDue); err == nil {
+			base = t
+		}
+	}
+
+	switch recur {
+	case "daily":
+		return base.AddDate(0, 0, 1).Format("2006-01-02")
+	case "weekly":
+		return base.AddDate(0, 0, 7).Format("2006-01-02")
+	case "monthly":
+		return base.AddDate(0, 1, 0).Format("2006-01-02")
+	default:
+		return currentDue
 	}
 }

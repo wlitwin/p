@@ -56,6 +56,16 @@ Examples:
 			Mode:        ai.ModePlan,
 		}
 
+		also, _ := cmd.Flags().GetStringSlice("also")
+		for _, name := range also {
+			aDir, err := project.Resolve(cfg.ProjectRoot, name)
+			if err != nil {
+				return fmt.Errorf("resolving --also project: %w", err)
+			}
+			task.AlsoProjects = append(task.AlsoProjects, aDir)
+			task.AlsoNames = append(task.AlsoNames, name)
+		}
+
 		if err := ai.Run(pBinary, claudePath, model, task); err != nil {
 			return err
 		}
@@ -96,5 +106,6 @@ Examples:
 
 func init() {
 	planCmd.Flags().BoolP("yes", "y", false, "Auto-confirm AI changes without prompting")
+	planCmd.Flags().StringSlice("also", nil, "Include context from other projects (comma-separated)")
 	rootCmd.AddCommand(planCmd)
 }

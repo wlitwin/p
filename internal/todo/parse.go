@@ -8,7 +8,7 @@ import (
 )
 
 var itemRe = regexp.MustCompile(`^(\s*)- \[([ x\-])\] (.+)$`)
-var metaRe = regexp.MustCompile(`\b(priority|due|created|done|blocked-by|tags)=(\S+)`)
+var metaRe = regexp.MustCompile(`\b(priority|due|created|done|blocked-by|tags|recur)=(\S+)`)
 
 func Parse(content string) (*List, error) {
 	lines := strings.Split(content, "\n")
@@ -110,6 +110,8 @@ func parseItems(lines []string, baseIndent int) []*Item {
 				item.DoneDate = loc[2]
 			case "tags":
 				item.Tags = strings.Split(loc[2], ",")
+			case "recur":
+				item.Recur = loc[2]
 			}
 		}
 
@@ -183,6 +185,9 @@ func renderItems(sb *strings.Builder, items []*Item, indent int) {
 		}
 		if len(item.Tags) > 0 {
 			meta = append(meta, fmt.Sprintf("tags=%s", strings.Join(item.Tags, ",")))
+		}
+		if item.Recur != "" {
+			meta = append(meta, fmt.Sprintf("recur=%s", item.Recur))
 		}
 
 		if len(meta) > 0 {

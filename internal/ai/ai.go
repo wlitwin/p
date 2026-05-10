@@ -14,11 +14,13 @@ import (
 )
 
 type Task struct {
-	ProjectName string
-	ProjectDir  string
-	Input       string
-	Mode        Mode
-	ListName    string // hint for todo mode, may be empty
+	ProjectName   string
+	ProjectDir    string
+	Input         string
+	Mode          Mode
+	ListName      string   // hint for todo mode, may be empty
+	AlsoProjects  []string // additional project dirs for multi-project context
+	AlsoNames     []string // names corresponding to AlsoProjects
 }
 
 type Mode string
@@ -58,7 +60,16 @@ type assistantMessage struct {
 	Content []contentBlock `json:"content"`
 }
 
-func Run(pBinary, claudeBinary, model string, task Task) error {
+type RunOptions struct {
+	Continue bool // resume last conversation
+}
+
+func Run(pBinary, claudeBinary, model string, task Task, opts ...RunOptions) error {
+	var opt RunOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+	_ = opt
 	prompt := buildPrompt(task)
 
 	mcpCfg := mcpConfig{
@@ -82,11 +93,16 @@ func Run(pBinary, claudeBinary, model string, task Task) error {
 		"--mcp-config", string(mcpJSON),
 		"--strict-mcp-config",
 		"--tools", "mcp",
-		"--no-session-persistence",
 		"--dangerously-skip-permissions",
 		"--model", model,
-		"-p", "Use the p MCP tools to complete the task described in the system prompt. Do not ask clarifying questions — make your best judgment.",
+		"--name", fmt.Sprintf("p-%s", task.ProjectName),
 	}
+
+	if opt.Continue {
+		args = append(args, "--continue")
+	}
+
+	args = append(args, "-p", "Use the p MCP tools to complete the task described in the system prompt. Do not ask clarifying questions — make your best judgment.")
 
 	cmd := exec.Command(claudeBinary, args...)
 	cmd.Stderr = nil // suppress claude's stderr warnings
@@ -171,6 +187,13 @@ func buildPrompt(task Task) string {
 
 	sb.WriteString("## Current project state\n\n")
 	sb.WriteString(projectContext(task))
+
+	for i, alsoDir := range task.AlsoProjects {
+		name := task.AlsoNames[i]
+		alsoTask := Task{ProjectName: name, ProjectDir: alsoDir}
+		fmt.Fprintf(&sb, "## Related project: %s\n\n", name)
+		sb.WriteString(projectContext(alsoTask))
+	}
 
 	sb.WriteString("## Task\n\n")
 
