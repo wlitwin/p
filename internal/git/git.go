@@ -31,6 +31,33 @@ func CommitAll(dir, message string) error {
 	return run(dir, "commit", "-m", message)
 }
 
+func Diff(dir string) (string, error) {
+	staged, err := output(dir, "diff", "--cached")
+	if err != nil {
+		return "", err
+	}
+	unstaged, err := output(dir, "diff")
+	if err != nil {
+		return "", err
+	}
+	untracked, err := output(dir, "status", "--porcelain")
+	if err != nil {
+		return "", err
+	}
+	return staged + unstaged + untracked, nil
+}
+
+func DiffStat(dir string) (string, error) {
+	return output(dir, "diff", "--stat", "HEAD")
+}
+
+func RevertChanges(dir string) error {
+	if err := run(dir, "checkout", "."); err != nil {
+		return err
+	}
+	return run(dir, "clean", "-fd")
+}
+
 func run(dir string, args ...string) error {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
