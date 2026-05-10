@@ -11,6 +11,13 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
       in {
+        packages.default = pkgs.buildGoModule {
+          pname = "p";
+          version = "0.1.0";
+          src = ./.;
+          vendorHash = null;
+        };
+
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             go
