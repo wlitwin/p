@@ -166,7 +166,7 @@ func processStreamLine(line string) {
 				}
 			case "text":
 				if text := strings.TrimSpace(block.Text); text != "" {
-					rendered, err := renderMarkdown(text)
+					rendered, err := RenderMarkdown(text)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "\n%s\n", text)
 					} else {
@@ -190,7 +190,7 @@ func processStreamLine(line string) {
 
 var mdRenderer *glamour.TermRenderer
 
-func renderMarkdown(text string) (string, error) {
+func RenderMarkdown(text string) (string, error) {
 	if mdRenderer == nil {
 		var err error
 		mdRenderer, err = glamour.NewTermRenderer(

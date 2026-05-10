@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/walter/p/internal/ai"
 )
 
 var howCmd = &cobra.Command{
@@ -43,10 +44,20 @@ Examples:
 		}
 
 		claudeCmd := exec.Command(claudePath, claudeArgs...)
-		claudeCmd.Stdout = os.Stdout
 		claudeCmd.Stderr = os.Stderr
 
-		return claudeCmd.Run()
+		out, err := claudeCmd.Output()
+		if err != nil {
+			return err
+		}
+
+		rendered, renderErr := ai.RenderMarkdown(string(out))
+		if renderErr != nil {
+			fmt.Print(string(out))
+		} else {
+			fmt.Print(rendered)
+		}
+		return nil
 	},
 }
 
