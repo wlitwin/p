@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"path/filepath"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
@@ -99,13 +101,17 @@ func (s *serverCtx) handleProjectCreate(_ context.Context, req mcp.CallToolReque
 		return errResult("name is required")
 	}
 
+	if err := validate.ProjectName(name); err != nil {
+		return errResult("%v", err)
+	}
+
 	desc := req.GetString("description", "")
 
 	if err := project.Create(s.projectRoot, name, desc); err != nil {
 		return errResult("%v", err)
 	}
 
-	dir := s.projectRoot + "/" + name
+	dir := filepath.Join(s.projectRoot, name)
 	if err := git.Init(dir); err != nil {
 		return errResult("git init: %v", err)
 	}

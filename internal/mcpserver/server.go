@@ -312,6 +312,9 @@ func (s *serverCtx) handleTodoAdd(_ context.Context, req mcp.CallToolRequest) (*
 	if proj == "" || listName == "" || text == "" {
 		return errResult("project, list, and text are required")
 	}
+	if err := validate.ListName(listName); err != nil {
+		return errResult("%v", err)
+	}
 
 	dir, err := project.Resolve(s.projectRoot, proj)
 	if err != nil {
@@ -458,6 +461,9 @@ func (s *serverCtx) handleKnowledgeCreate(_ context.Context, req mcp.CallToolReq
 	if proj == "" || filename == "" || title == "" {
 		return errResult("project, filename, and title are required")
 	}
+	if err := validate.Filename(filename); err != nil {
+		return errResult("%v", err)
+	}
 
 	dir, err := project.Resolve(s.projectRoot, proj)
 	if err != nil {
@@ -570,14 +576,9 @@ func (s *serverCtx) handleTodoMove(_ context.Context, req mcp.CallToolRequest) (
 		return errResult("%v", err)
 	}
 
-	itemCopy := *item
-	if err := todo.RemoveItem(srcList, itemID); err != nil {
-		return errResult("removing from source: %v", err)
-	}
-	if err := todo.SaveList(dir, listName, srcList); err != nil {
-		return errResult("saving source: %v", err)
-	}
+	itemCopy := todo.DeepCopyItem(item)
 
+	// Write to destination first — source still has the item if this fails
 	dstList, err := todo.LoadList(dir, targetList)
 	if err != nil {
 		dstList, err = todo.CreateList(dir, targetList, targetList)
@@ -585,9 +586,17 @@ func (s *serverCtx) handleTodoMove(_ context.Context, req mcp.CallToolRequest) (
 			return errResult("creating target: %v", err)
 		}
 	}
-	dstList.Items = append(dstList.Items, &itemCopy)
+	dstList.Items = append(dstList.Items, itemCopy)
 	if err := todo.SaveList(dir, targetList, dstList); err != nil {
 		return errResult("saving target: %v", err)
+	}
+
+	// Only remove from source after destination is safely written
+	if err := todo.RemoveItem(srcList, itemID); err != nil {
+		return errResult("removing from source: %v", err)
+	}
+	if err := todo.SaveList(dir, listName, srcList); err != nil {
+		return errResult("saving source: %v", err)
 	}
 
 	return textResult(fmt.Sprintf("Moved %s #%s to %s", listName, itemID, targetList)), nil

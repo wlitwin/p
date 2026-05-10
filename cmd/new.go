@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/git"
@@ -28,7 +29,7 @@ var newCmd = &cobra.Command{
 			return err
 		}
 
-		projectDir := cfg.ProjectRoot + "/" + name
+		projectDir := filepath.Join(cfg.ProjectRoot, name)
 		if err := git.Init(projectDir); err != nil {
 			return fmt.Errorf("initializing git: %w", err)
 		}

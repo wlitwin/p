@@ -116,8 +116,17 @@ func searchItems(items []*todo.Item, projectName, listName, prefix string, start
 }
 
 func matchContext(content, query string) string {
-	lower := strings.ToLower(content)
-	idx := strings.Index(lower, query)
+	runes := []rune(content)
+	lowerRunes := []rune(strings.ToLower(content))
+	queryRunes := []rune(strings.ToLower(query))
+
+	idx := -1
+	for i := 0; i <= len(lowerRunes)-len(queryRunes); i++ {
+		if string(lowerRunes[i:i+len(queryRunes)]) == string(queryRunes) {
+			idx = i
+			break
+		}
+	}
 	if idx == -1 {
 		return ""
 	}
@@ -126,12 +135,12 @@ func matchContext(content, query string) string {
 	if start < 0 {
 		start = 0
 	}
-	end := idx + len(query) + 30
-	if end > len(content) {
-		end = len(content)
+	end := idx + len(queryRunes) + 30
+	if end > len(runes) {
+		end = len(runes)
 	}
 
-	snippet := strings.ReplaceAll(content[start:end], "\n", " ")
+	snippet := strings.ReplaceAll(string(runes[start:end]), "\n", " ")
 	snippet = strings.TrimSpace(snippet)
 
 	prefix := ""
@@ -139,7 +148,7 @@ func matchContext(content, query string) string {
 		prefix = "..."
 	}
 	suffix := ""
-	if end < len(content) {
+	if end < len(runes) {
 		suffix = "..."
 	}
 

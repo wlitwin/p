@@ -178,6 +178,21 @@ func RemoveItem(list *List, id string) error {
 	return nil
 }
 
+func DeepCopyItem(item *Item) *Item {
+	cp := *item
+	if len(item.Tags) > 0 {
+		cp.Tags = make([]string, len(item.Tags))
+		copy(cp.Tags, item.Tags)
+	}
+	if len(item.Children) > 0 {
+		cp.Children = make([]*Item, len(item.Children))
+		for i, child := range item.Children {
+			cp.Children[i] = DeepCopyItem(child)
+		}
+	}
+	return &cp
+}
+
 func SetState(item *Item, state State) {
 	if state == Done && item.Recur != "" {
 		// Recurring task: mark done but immediately reopen
@@ -196,21 +211,38 @@ func SetState(item *Item, state State) {
 }
 
 func nextDueDate(recur, currentDue string) string {
-	base := time.Now().UTC()
+	now := time.Now().UTC()
+	base := now
 	if currentDue != "" {
 		if t, err := time.Parse("2006-01-02", currentDue); err == nil {
 			base = t
 		}
 	}
 
+	var next time.Time
 	switch recur {
 	case "daily":
-		return base.AddDate(0, 0, 1).Format("2006-01-02")
+		next = base.AddDate(0, 0, 1)
 	case "weekly":
-		return base.AddDate(0, 0, 7).Format("2006-01-02")
+		next = base.AddDate(0, 0, 7)
 	case "monthly":
-		return base.AddDate(0, 1, 0).Format("2006-01-02")
+		next = base.AddDate(0, 1, 0)
 	default:
 		return currentDue
 	}
+
+	// If the computed next date is still in the past, advance to the next
+	// occurrence from today instead
+	if next.Before(now) {
+		switch recur {
+		case "daily":
+			next = now.AddDate(0, 0, 1)
+		case "weekly":
+			next = now.AddDate(0, 0, 7)
+		case "monthly":
+			next = now.AddDate(0, 1, 0)
+		}
+	}
+
+	return next.Format("2006-01-02")
 }

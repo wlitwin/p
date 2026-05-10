@@ -38,18 +38,9 @@ var moveCmd = &cobra.Command{
 			return err
 		}
 
-		// Copy the item
-		itemCopy := *item
+		itemCopy := todo.DeepCopyItem(item)
 
-		// Remove from source
-		if err := todo.RemoveItem(srcList, itemID); err != nil {
-			return fmt.Errorf("removing from source: %w", err)
-		}
-		if err := todo.SaveList(dir, srcListName, srcList); err != nil {
-			return err
-		}
-
-		// Add to destination
+		// Add to destination first (safe — source still has the item)
 		dstList, err := todo.LoadList(dir, dstListName)
 		if err != nil {
 			dstList, err = todo.CreateList(dir, dstListName, dstListName)
@@ -57,8 +48,16 @@ var moveCmd = &cobra.Command{
 				return fmt.Errorf("creating target list: %w", err)
 			}
 		}
-		dstList.Items = append(dstList.Items, &itemCopy)
+		dstList.Items = append(dstList.Items, itemCopy)
 		if err := todo.SaveList(dir, dstListName, dstList); err != nil {
+			return fmt.Errorf("saving target: %w", err)
+		}
+
+		// Only remove from source after destination is safely written
+		if err := todo.RemoveItem(srcList, itemID); err != nil {
+			return fmt.Errorf("removing from source: %w", err)
+		}
+		if err := todo.SaveList(dir, srcListName, srcList); err != nil {
 			return err
 		}
 

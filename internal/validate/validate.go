@@ -34,6 +34,19 @@ func ListName(name string) error {
 	return nil
 }
 
+func Filename(name string) error {
+	if name == "" {
+		return fmt.Errorf("filename cannot be empty")
+	}
+	if len(name) > 64 {
+		return fmt.Errorf("filename too long (max 64 characters)")
+	}
+	if !nameRe.MatchString(name) {
+		return fmt.Errorf("filename %q contains invalid characters — use letters, numbers, hyphens, underscores", name)
+	}
+	return nil
+}
+
 func Priority(p string) error {
 	if p != "now" && p != "backlog" {
 		return fmt.Errorf("invalid priority %q — use 'now' or 'backlog'", p)
