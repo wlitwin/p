@@ -119,7 +119,7 @@ func listItems(projectName, listName string, cmd *cobra.Command) error {
 	filtered := filterItems(list.Items, stateFilter, priorityFilter, tagFilter)
 
 	fmt.Printf("# %s\n\n", list.Title)
-	printItems(filtered, "", 1)
+	printItems(filtered, "", 1, dir)
 	return nil
 }
 
@@ -153,7 +153,12 @@ func hasTag(item *todo.Item, tag string) bool {
 	return false
 }
 
-func printItems(items []*todo.Item, prefix string, start int) {
+func printItems(items []*todo.Item, prefix string, start int, projectDir ...string) {
+	dir := ""
+	if len(projectDir) > 0 {
+		dir = projectDir[0]
+	}
+
 	for i, item := range items {
 		id := fmt.Sprintf("%s%d", prefix, start+i)
 		marker := "[ ]"
@@ -179,6 +184,9 @@ func printItems(items []*todo.Item, prefix string, start int) {
 		}
 
 		text := item.Text
+		if dir != "" {
+			text = tui.RenderWikiLinks(text, dir)
+		}
 		if item.State == todo.Done {
 			text = tui.Dim.Render(text)
 		}
@@ -186,7 +194,7 @@ func printItems(items []*todo.Item, prefix string, start int) {
 		fmt.Printf("  %s %s %s%s\n", styledID, styledMarker, text, meta)
 
 		if len(item.Children) > 0 {
-			printItems(item.Children, id+".", 1)
+			printItems(item.Children, id+".", 1, dir)
 		}
 	}
 }

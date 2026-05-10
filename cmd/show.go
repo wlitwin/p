@@ -7,6 +7,7 @@ import (
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/tui"
 )
 
 var showCmd = &cobra.Command{
@@ -30,7 +31,7 @@ var showCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("reading knowledge doc: %w", err)
 			}
-			fmt.Print(content)
+			fmt.Print(tui.RenderWikiLinks(content, dir))
 			return nil
 		}
 
@@ -41,12 +42,12 @@ var showCmd = &cobra.Command{
 			if kerr != nil {
 				return fmt.Errorf("not found as todo list or knowledge doc: %s", args[1])
 			}
-			fmt.Print(content)
+			fmt.Print(tui.RenderWikiLinks(content, dir))
 			return nil
 		}
 
 		fmt.Printf("# %s\n\n", list.Title)
-		printItems(list.Items, "", 1)
+		printItems(list.Items, "", 1, dir)
 		return nil
 	},
 }
