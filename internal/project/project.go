@@ -14,6 +14,7 @@ type ProjectMeta struct {
 	Created     time.Time `yaml:"created"`
 	Archived    bool      `yaml:"archived"`
 	Description string    `yaml:"description,omitempty"`
+	CodeDir     string    `yaml:"code_dir,omitempty"`
 }
 
 func Create(root, name, description string) error {

@@ -33,13 +33,24 @@ const (
 	ModeAsk       Mode = "ask"
 )
 
-type mcpConfig struct {
-	MCPServers map[string]mcpServerDef `json:"mcpServers"`
+type MCPServerConfig struct {
+	MCPServers map[string]MCPServerDef `json:"mcpServers"`
 }
 
-type mcpServerDef struct {
+type MCPServerDef struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
+}
+
+func MCPConfig(pBinary string) MCPServerConfig {
+	return MCPServerConfig{
+		MCPServers: map[string]MCPServerDef{
+			"p": {
+				Command: pBinary,
+				Args:    []string{"mcp"},
+			},
+		},
+	}
 }
 
 // stream-json event types we care about
@@ -73,8 +84,8 @@ func Run(pBinary, claudeBinary, model string, task Task, opts ...RunOptions) err
 	_ = opt
 	prompt := buildPrompt(task)
 
-	mcpCfg := mcpConfig{
-		MCPServers: map[string]mcpServerDef{
+	mcpCfg := MCPServerConfig{
+		MCPServers: map[string]MCPServerDef{
 			"p": {
 				Command: pBinary,
 				Args:    []string{"mcp"},
