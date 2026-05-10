@@ -11,12 +11,14 @@ import (
 type Config struct {
 	ProjectRoot     string `yaml:"project_root"`
 	ClaudePath      string `yaml:"claude_path"`
+	ClaudeModel     string `yaml:"claude_model"`
 	DefaultPriority string `yaml:"default_priority"`
 }
 
 func DefaultConfig() Config {
 	return Config{
 		ClaudePath:      "claude",
+		ClaudeModel:     "claude-opus-4-6",
 		DefaultPriority: "now",
 	}
 }

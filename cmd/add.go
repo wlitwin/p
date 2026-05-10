@@ -72,6 +72,10 @@ Use --ai to have the AI agent decide placement and wording.`,
 			if claudePath == "" {
 				claudePath = "claude"
 			}
+			model := cfg.ClaudeModel
+			if model == "" {
+				model = "claude-opus-4-6"
+			}
 
 			task := ai.Task{
 				ProjectName: projectName,
@@ -81,7 +85,7 @@ Use --ai to have the AI agent decide placement and wording.`,
 				ListName:    listName,
 			}
 
-			if err := ai.Run(pBinary, claudePath, task); err != nil {
+			if err := ai.Run(pBinary, claudePath, model, task); err != nil {
 				return err
 			}
 

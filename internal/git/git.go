@@ -32,19 +32,21 @@ func CommitAll(dir, message string) error {
 }
 
 func Diff(dir string) (string, error) {
+	// Stage everything first so we can show a unified diff
+	if err := run(dir, "add", "-A"); err != nil {
+		return "", err
+	}
 	staged, err := output(dir, "diff", "--cached")
 	if err != nil {
-		return "", err
+		// If no HEAD yet (first commit scenario), diff against empty tree
+		staged, err = output(dir, "diff", "--cached", "--diff-filter=A")
+		if err != nil {
+			return "", err
+		}
 	}
-	unstaged, err := output(dir, "diff")
-	if err != nil {
-		return "", err
-	}
-	untracked, err := output(dir, "status", "--porcelain")
-	if err != nil {
-		return "", err
-	}
-	return staged + unstaged + untracked, nil
+	// Unstage so the user can still choose to revert
+	_ = runQuiet(dir, "reset", "HEAD")
+	return staged, nil
 }
 
 func DiffStat(dir string) (string, error) {
@@ -63,6 +65,15 @@ func run(dir string, args ...string) error {
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git %v: %w", args, err)
+	}
+	return nil
+}
+
+func runQuiet(dir string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git %v: %w", args, err)
 	}
