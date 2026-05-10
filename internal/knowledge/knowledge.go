@@ -78,11 +78,11 @@ func Append(projectDir, filename, content, section string) error {
 	text := string(data)
 
 	if section != "" {
-		idx := findSection(text, section)
+		idx, level := findSection(text, section)
 		if idx == -1 {
 			return fmt.Errorf("section %q not found in %s", section, filename)
 		}
-		nextSection := findNextSection(text, idx)
+		nextSection := findNextSection(text, idx, level)
 		insertAt := nextSection
 		if insertAt == -1 {
 			insertAt = len(text)
@@ -107,7 +107,7 @@ func ReplaceSection(projectDir, filename, section, newContent string) error {
 	}
 
 	text := string(data)
-	start := findSection(text, section)
+	start, level := findSection(text, section)
 	if start == -1 {
 		return fmt.Errorf("section %q not found in %s", section, filename)
 	}
@@ -118,7 +118,7 @@ func ReplaceSection(projectDir, filename, section, newContent string) error {
 	}
 	headerEnd += start + 1
 
-	end := findNextSection(text, start)
+	end := findNextSection(text, start, level)
 	if end == -1 {
 		end = len(text)
 	}
@@ -173,23 +173,44 @@ func Rename(projectDir, oldName, newName string) error {
 	return os.Rename(oldPath, newPath)
 }
 
-func findSection(text, section string) int {
+func headingLevel(line string) int {
+	trimmed := strings.TrimSpace(line)
+	level := 0
+	for _, c := range trimmed {
+		if c == '#' {
+			level++
+		} else {
+			break
+		}
+	}
+	return level
+}
+
+func headingText(line string) string {
+	trimmed := strings.TrimSpace(line)
+	i := 0
+	for i < len(trimmed) && trimmed[i] == '#' {
+		i++
+	}
+	return strings.TrimSpace(trimmed[i:])
+}
+
+func findSection(text, section string) (int, int) {
 	lines := strings.Split(text, "\n")
 	pos := 0
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "#") {
-			heading := strings.TrimLeft(trimmed, "# ")
-			if strings.EqualFold(heading, section) {
-				return pos
+			if strings.EqualFold(headingText(line), section) {
+				return pos, headingLevel(line)
 			}
 		}
 		pos += len(line) + 1
 	}
-	return -1
+	return -1, 0
 }
 
-func findNextSection(text string, afterPos int) int {
+func findNextSection(text string, afterPos int, atLevel int) int {
 	lines := strings.Split(text[afterPos:], "\n")
 	pos := afterPos
 	first := true
@@ -200,7 +221,7 @@ func findNextSection(text string, afterPos int) int {
 			continue
 		}
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "#") {
+		if strings.HasPrefix(trimmed, "#") && headingLevel(line) <= atLevel {
 			return pos
 		}
 		pos += len(line) + 1

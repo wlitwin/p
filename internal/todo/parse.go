@@ -17,6 +17,7 @@ func Parse(content string) (*List, error) {
 	inFrontmatter := false
 	frontmatterDone := false
 	var bodyLines []string
+	var frontmatterLines []string
 
 	for _, line := range lines {
 		if !frontmatterDone {
@@ -24,17 +25,25 @@ func Parse(content string) (*List, error) {
 			if trimmed == "---" {
 				if inFrontmatter {
 					frontmatterDone = true
+					for _, fl := range frontmatterLines {
+						parseFrontmatterLine(list, fl)
+					}
 					continue
 				}
 				inFrontmatter = true
 				continue
 			}
 			if inFrontmatter {
-				parseFrontmatterLine(list, trimmed)
+				frontmatterLines = append(frontmatterLines, trimmed)
 				continue
 			}
 		}
 		bodyLines = append(bodyLines, line)
+	}
+
+	// If frontmatter was never closed, treat all buffered lines as body
+	if inFrontmatter && !frontmatterDone {
+		bodyLines = append([]string{"---"}, append(frontmatterLines, bodyLines...)...)
 	}
 
 	list.Items = parseItems(bodyLines, 0)

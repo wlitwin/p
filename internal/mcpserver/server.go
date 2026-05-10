@@ -78,12 +78,12 @@ func (s *serverCtx) locked(handler toolHandler) toolHandler {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		proj := req.GetString("project", "")
 		if proj == "" {
-			return handler(ctx, req)
+			return errResult("project is required")
 		}
 
 		dir, err := project.Resolve(s.projectRoot, proj)
 		if err != nil {
-			return handler(ctx, req)
+			return errResult("%v", err)
 		}
 
 		lk, err := lock.Acquire(dir)
