@@ -23,15 +23,26 @@ func NewServer(projectRoot string) *server.MCPServer {
 
 	// Read-only tools
 	s.AddTool(projectListTool(), ctx.handleProjectList)
+	s.AddTool(statusTool(), ctx.handleStatus)
+	s.AddTool(searchTool(), ctx.handleSearch)
 	s.AddTool(todoListTool(), ctx.handleTodoList)
 	s.AddTool(knowledgeReadTool(), ctx.handleKnowledgeRead)
+	s.AddTool(knowledgeListTool(), ctx.handleKnowledgeList)
+	s.AddTool(knowledgeSearchTool(), ctx.handleKnowledgeSearch)
+
+	// Project mutation tools
+	s.AddTool(projectCreateTool(), ctx.handleProjectCreate)
+	s.AddTool(projectArchiveTool(), ctx.handleProjectArchive)
 
 	// Todo mutation tools
 	s.AddTool(todoAddTool(), ctx.handleTodoAdd)
 	s.AddTool(todoUpdateTool(), ctx.handleTodoUpdate)
 	s.AddTool(todoStateTool(), ctx.handleTodoState)
+	s.AddTool(todoPriorityTool(), ctx.handleTodoPriority)
+	s.AddTool(todoDueTool(), ctx.handleTodoDue)
 	s.AddTool(todoRemoveTool(), ctx.handleTodoRemove)
 	s.AddTool(todoMoveTool(), ctx.handleTodoMove)
+	s.AddTool(todoRmListTool(), ctx.handleTodoRmList)
 
 	// Knowledge mutation tools
 	s.AddTool(knowledgeCreateTool(), ctx.handleKnowledgeCreate)
@@ -59,7 +70,7 @@ func errResult(format string, args ...any) (*mcp.CallToolResult, error) {
 	return mcp.NewToolResultError(fmt.Sprintf(format, args...)), nil
 }
 
-// --- Tool definitions ---
+// --- Tool definitions --- Project tools ---
 
 func projectListTool() mcp.Tool {
 	return mcp.NewTool("project_list",
