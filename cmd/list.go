@@ -46,6 +46,7 @@ func listProjects(cmd *cobra.Command) error {
 		fmt.Println("No projects found. Create one with: p new <name>")
 		return nil
 	}
+	fmt.Printf("%s\n\n", tui.Dim.Render(cfg.ProjectRoot))
 	for _, p := range projects {
 		dir, _ := project.Resolve(cfg.ProjectRoot, p.Name)
 
@@ -65,8 +66,7 @@ func listProjects(cmd *cobra.Command) error {
 			updated = " " + tui.Dim.Render("updated="+lastMod)
 		}
 
-		fmt.Printf("  %s%s%s\n", tui.Bold.Render(p.Name), desc, status)
-		fmt.Printf("    %s %s%s\n", tui.Dim.Render(dir), created, updated)
+		fmt.Printf("  %s%s%s  %s%s\n", tui.Bold.Render(p.Name), desc, status, created, updated)
 	}
 	return nil
 }
