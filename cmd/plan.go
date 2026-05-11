@@ -2,12 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/ai"
-	"github.com/walter/p/internal/git"
-	"github.com/walter/p/internal/project"
 )
 
 var planCmd = &cobra.Command{
@@ -22,73 +19,15 @@ Examples:
   p plan serviceA "Review the current state and suggest what's missing"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-
-		projectName := args[0]
-		input := args[1]
-
-		dir, err := project.Resolve(cfg.ProjectRoot, projectName)
-		if err != nil {
-			return err
-		}
-
-		pBinary, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("resolving executable path: %w", err)
-		}
-
-		claudePath := cfg.ClaudePath
-		if claudePath == "" {
-			claudePath = "claude"
-		}
-		model := cfg.ClaudeModel
-		if model == "" {
-			model = "claude-opus-4-6"
-		}
-
-		task := ai.Task{
-			ProjectName: projectName,
-			ProjectDir:  dir,
-			Input:       input,
+		also, _ := cmd.Flags().GetStringSlice("also")
+		return runAIWithCommit(aiTaskConfig{
+			ProjectName: args[0],
+			Input:       args[1],
 			Mode:        ai.ModePlan,
 			CommandName: "plan",
-		}
-
-		also, _ := cmd.Flags().GetStringSlice("also")
-		for _, name := range also {
-			aDir, err := project.Resolve(cfg.ProjectRoot, name)
-			if err != nil {
-				return fmt.Errorf("resolving --also project: %w", err)
-			}
-			task.AlsoProjects = append(task.AlsoProjects, aDir)
-			task.AlsoNames = append(task.AlsoNames, name)
-		}
-
-		if err := ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
-			return err
-		}
-
-		diff, err := git.Diff(dir)
-		if err != nil {
-			return fmt.Errorf("getting diff: %w", err)
-		}
-
-		if diff == "" {
-			fmt.Println("AI made no changes.")
-			return nil
-		}
-
-		fmt.Fprintf(os.Stderr, "\n--- Changes ---\n%s\n", diff)
-
-		commitMsg := fmt.Sprintf("p: AI plan — %s", truncate(input, 60))
-		if err := git.CommitAll(dir, commitMsg); err != nil {
-			return fmt.Errorf("committing: %w", err)
-		}
-
-		fmt.Println("Changes committed.")
-		return nil
+			CommitMsg:   fmt.Sprintf("p: AI plan — %s", truncate(args[1], 60)),
+			AlsoNames:   also,
+		})
 	},
 }
 
