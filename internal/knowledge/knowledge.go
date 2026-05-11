@@ -181,6 +181,73 @@ func Search(projectDir, query string) ([]string, error) {
 	return matches, nil
 }
 
+// MatchFiles returns knowledge doc names matching any of the given glob patterns.
+// If patterns is nil or empty, returns all files (backwards compatible).
+// Patterns are matched against doc names (relative paths without .md extension).
+// Supported syntax: filepath.Match patterns plus "**" for recursive matching.
+func MatchFiles(projectDir string, patterns []string) ([]string, error) {
+	allFiles, err := ListFiles(projectDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// nil/empty patterns = return all (backwards compatible)
+	if len(patterns) == 0 {
+		return allFiles, nil
+	}
+
+	seen := make(map[string]bool)
+	var matched []string
+	for _, name := range allFiles {
+		for _, pattern := range patterns {
+			ok, err := matchGlob(pattern, name)
+			if err != nil {
+				return nil, fmt.Errorf("invalid pattern %q: %w", pattern, err)
+			}
+			if ok && !seen[name] {
+				seen[name] = true
+				matched = append(matched, name)
+				break
+			}
+		}
+	}
+	return matched, nil
+}
+
+// matchGlob matches a name against a glob pattern.
+// It supports filepath.Match syntax plus "**" for recursive directory matching.
+func matchGlob(pattern, name string) (bool, error) {
+	// Handle "**" — matches everything recursively
+	if pattern == "**" {
+		return true, nil
+	}
+
+	// Handle patterns containing "**/"
+	if strings.Contains(pattern, "**/") {
+		// "dir/**" matches all files under dir/ recursively
+		// "dir/**/foo" matches dir/foo, dir/a/foo, dir/a/b/foo, etc.
+		prefix := strings.SplitN(pattern, "/**/", 2)
+		if len(prefix) == 2 {
+			// pattern is "prefix/**/suffix"
+			if !strings.HasPrefix(name, prefix[0]+"/") {
+				return false, nil
+			}
+			rest := name[len(prefix[0])+1:]
+			// Try matching suffix against every sub-path
+			return matchGlob(prefix[1], rest)
+		}
+	}
+
+	// Handle trailing "/**" — matches everything under a directory
+	if strings.HasSuffix(pattern, "/**") {
+		dirPrefix := strings.TrimSuffix(pattern, "/**")
+		return strings.HasPrefix(name, dirPrefix+"/"), nil
+	}
+
+	// Use filepath.Match for standard glob patterns
+	return filepath.Match(pattern, name)
+}
+
 func Delete(projectDir, filename string) error {
 	path := FilePath(projectDir, filename)
 	if _, err := os.Stat(path); err != nil {

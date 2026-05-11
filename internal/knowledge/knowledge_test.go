@@ -477,3 +477,258 @@ func TestReplaceSectionNonexistentFile(t *testing.T) {
 		t.Error("expected error when replacing section in nonexistent file")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// MatchFiles tests
+// ---------------------------------------------------------------------------
+
+// setupMatchTestProject creates a project with knowledge docs for testing
+// glob matching. Since ListFiles currently only supports flat structure,
+// we test with flat file names. When Phase 5 adds subdirectory support,
+// these tests can be extended.
+func setupMatchTestProject(t *testing.T) string {
+	t.Helper()
+	dir := setupTestProject(t)
+
+	docs := []string{
+		"overview",
+		"architecture",
+		"api-design",
+		"db-migration",
+		"db-schema",
+		"deploy-runbook",
+	}
+	for _, name := range docs {
+		if err := Create(dir, name, strings.Title(name), nil); err != nil {
+			t.Fatalf("Create(%s) failed: %v", name, err)
+		}
+	}
+	return dir
+}
+
+func TestMatchFilesNilPatterns(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	files, err := MatchFiles(dir, nil)
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 6 {
+		t.Errorf("got %d files, want 6 (all)", len(files))
+	}
+}
+
+func TestMatchFilesEmptyPatterns(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	files, err := MatchFiles(dir, []string{})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 6 {
+		t.Errorf("got %d files, want 6 (all)", len(files))
+	}
+}
+
+func TestMatchFilesExactName(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	files, err := MatchFiles(dir, []string{"overview"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("got %d files, want 1", len(files))
+	}
+	if files[0] != "overview" {
+		t.Errorf("files[0] = %q, want %q", files[0], "overview")
+	}
+}
+
+func TestMatchFilesPrefix(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	files, err := MatchFiles(dir, []string{"db-*"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2", len(files))
+	}
+
+	found := make(map[string]bool)
+	for _, f := range files {
+		found[f] = true
+	}
+	if !found["db-migration"] {
+		t.Error("missing db-migration")
+	}
+	if !found["db-schema"] {
+		t.Error("missing db-schema")
+	}
+}
+
+func TestMatchFilesStarMatchesTopLevel(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	files, err := MatchFiles(dir, []string{"*"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	// All files are top-level, so * matches all
+	if len(files) != 6 {
+		t.Errorf("got %d files, want 6", len(files))
+	}
+}
+
+func TestMatchFilesDoubleStarMatchesAll(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	files, err := MatchFiles(dir, []string{"**"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 6 {
+		t.Errorf("got %d files, want 6", len(files))
+	}
+}
+
+func TestMatchFilesNoMatches(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	files, err := MatchFiles(dir, []string{"nonexistent-*"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("got %d files, want 0", len(files))
+	}
+}
+
+func TestMatchFilesOverlappingDeduplicates(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	// Both patterns match "db-migration", should only appear once
+	files, err := MatchFiles(dir, []string{"db-*", "db-migration"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2 (db-migration and db-schema)", len(files))
+	}
+
+	count := 0
+	for _, f := range files {
+		if f == "db-migration" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("db-migration appeared %d times, want 1", count)
+	}
+}
+
+func TestMatchFilesMultiplePatterns(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	files, err := MatchFiles(dir, []string{"overview", "api-*", "deploy-*"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 3 {
+		t.Fatalf("got %d files, want 3", len(files))
+	}
+
+	found := make(map[string]bool)
+	for _, f := range files {
+		found[f] = true
+	}
+	if !found["overview"] {
+		t.Error("missing overview")
+	}
+	if !found["api-design"] {
+		t.Error("missing api-design")
+	}
+	if !found["deploy-runbook"] {
+		t.Error("missing deploy-runbook")
+	}
+}
+
+func TestMatchFilesQuestionMark(t *testing.T) {
+	dir := setupMatchTestProject(t)
+
+	// "db-schem?" should match "db-schema"
+	files, err := MatchFiles(dir, []string{"db-schem?"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("got %d files, want 1", len(files))
+	}
+	if files[0] != "db-schema" {
+		t.Errorf("files[0] = %q, want %q", files[0], "db-schema")
+	}
+}
+
+func TestMatchFilesEmptyProject(t *testing.T) {
+	dir := setupTestProject(t)
+
+	files, err := MatchFiles(dir, []string{"*"})
+	if err != nil {
+		t.Fatalf("MatchFiles error: %v", err)
+	}
+	if len(files) != 0 {
+		t.Errorf("got %d files, want 0 for empty project", len(files))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// matchGlob unit tests (for subdirectory patterns - future-proofing)
+// ---------------------------------------------------------------------------
+
+func TestMatchGlobDirectoryPatterns(t *testing.T) {
+	tests := []struct {
+		pattern string
+		name    string
+		want    bool
+	}{
+		// Exact match
+		{"overview", "overview", true},
+		{"overview", "other", false},
+
+		// Star matches within a path component
+		{"db-*", "db-migration", true},
+		{"db-*", "overview", false},
+		{"*", "overview", true},
+
+		// Double star matches everything
+		{"**", "overview", true},
+		{"**", "arch/overview", true},
+
+		// dir/* matches direct children
+		{"arch/*", "arch/overview", true},
+		{"arch/*", "arch/sub/deep", false},
+		{"arch/*", "overview", false},
+
+		// dir/** matches recursively
+		{"arch/**", "arch/overview", true},
+		{"arch/**", "arch/sub/deep", true},
+		{"arch/**", "overview", false},
+
+		// Question mark
+		{"d?-schema", "db-schema", true},
+		{"d?-schema", "dbc-schema", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern+"_"+tt.name, func(t *testing.T) {
+			got, err := matchGlob(tt.pattern, tt.name)
+			if err != nil {
+				t.Fatalf("matchGlob(%q, %q) error: %v", tt.pattern, tt.name, err)
+			}
+			if got != tt.want {
+				t.Errorf("matchGlob(%q, %q) = %v, want %v", tt.pattern, tt.name, got, tt.want)
+			}
+		})
+	}
+}
