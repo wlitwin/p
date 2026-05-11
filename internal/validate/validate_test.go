@@ -1,6 +1,10 @@
 package validate
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 func TestProjectName(t *testing.T) {
 	valid := []string{"myproject", "my-project", "project_1", "A", "test123"}
@@ -18,6 +22,30 @@ func TestProjectName(t *testing.T) {
 	}
 }
 
+func TestProjectNameSentinels(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr error
+	}{
+		{"empty", "", ErrEmpty},
+		{"too long", strings.Repeat("a", 65), ErrTooLong},
+		{"invalid chars", "bad/name", ErrInvalidChars},
+		{"starts with hyphen", "-start", ErrInvalidChars},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ProjectName(tt.input)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("errors.Is(err, %v) = false; err = %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestListName(t *testing.T) {
 	if err := ListName("valid-list"); err != nil {
 		t.Errorf("ListName should accept valid name: %v", err)
@@ -27,6 +55,36 @@ func TestListName(t *testing.T) {
 	}
 	if err := ListName("bad name"); err == nil {
 		t.Error("ListName should reject spaces")
+	}
+}
+
+func TestListNameSentinels(t *testing.T) {
+	err := ListName("")
+	if !errors.Is(err, ErrEmpty) {
+		t.Errorf("expected ErrEmpty, got %v", err)
+	}
+	err = ListName(strings.Repeat("x", 65))
+	if !errors.Is(err, ErrTooLong) {
+		t.Errorf("expected ErrTooLong, got %v", err)
+	}
+	err = ListName("bad name")
+	if !errors.Is(err, ErrInvalidChars) {
+		t.Errorf("expected ErrInvalidChars, got %v", err)
+	}
+}
+
+func TestFilenameSentinels(t *testing.T) {
+	err := Filename("")
+	if !errors.Is(err, ErrEmpty) {
+		t.Errorf("expected ErrEmpty, got %v", err)
+	}
+	err = Filename(strings.Repeat("x", 65))
+	if !errors.Is(err, ErrTooLong) {
+		t.Errorf("expected ErrTooLong, got %v", err)
+	}
+	err = Filename("bad.name")
+	if !errors.Is(err, ErrInvalidChars) {
+		t.Errorf("expected ErrInvalidChars, got %v", err)
 	}
 }
 
@@ -42,6 +100,13 @@ func TestPriority(t *testing.T) {
 	}
 }
 
+func TestPrioritySentinel(t *testing.T) {
+	err := Priority("critical")
+	if !errors.Is(err, ErrInvalidPriority) {
+		t.Errorf("expected ErrInvalidPriority, got %v", err)
+	}
+}
+
 func TestState(t *testing.T) {
 	for _, s := range []string{"open", "blocked", "done"} {
 		if err := State(s); err != nil {
@@ -50,6 +115,13 @@ func TestState(t *testing.T) {
 	}
 	if err := State("pending"); err == nil {
 		t.Error("should reject 'pending'")
+	}
+}
+
+func TestStateSentinel(t *testing.T) {
+	err := State("pending")
+	if !errors.Is(err, ErrInvalidState) {
+		t.Errorf("expected ErrInvalidState, got %v", err)
 	}
 }
 
@@ -65,5 +137,16 @@ func TestDate(t *testing.T) {
 	}
 	if err := Date("not-a-date"); err == nil {
 		t.Error("should reject non-date")
+	}
+}
+
+func TestDateSentinel(t *testing.T) {
+	err := Date("not-a-date")
+	if !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("expected ErrInvalidDate, got %v", err)
+	}
+	err = Date("13-01-2026")
+	if !errors.Is(err, ErrInvalidDate) {
+		t.Errorf("expected ErrInvalidDate, got %v", err)
 	}
 }
