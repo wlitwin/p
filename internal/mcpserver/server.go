@@ -46,6 +46,7 @@ func NewServer(projectRoot string) *server.MCPServer {
 	s.AddTool(todoRemoveTool(), ctx.locked(ctx.handleTodoRemove))
 	s.AddTool(todoMoveTool(), ctx.locked(ctx.handleTodoMove))
 	s.AddTool(todoRmListTool(), ctx.locked(ctx.handleTodoRmList))
+	s.AddTool(todoContextTool(), ctx.locked(ctx.handleTodoContext))
 
 	// Knowledge mutation tools
 	s.AddTool(knowledgeCreateTool(), ctx.locked(ctx.handleKnowledgeCreate))
@@ -230,6 +231,16 @@ func knowledgeDeleteTool() mcp.Tool {
 		mcp.WithDescription("Delete a knowledge document."),
 		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
 		mcp.WithString("filename", mcp.Description("Knowledge doc filename (without .md)"), mcp.Required()),
+	)
+}
+
+func todoContextTool() mcp.Tool {
+	return mcp.NewTool("todo_context",
+		mcp.WithDescription("Set or clear context patterns on a todo list. Context patterns control which knowledge docs are included in AI prompts for this list. Pass patterns to set, omit patterns with clear=true to remove."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+		mcp.WithString("list", mcp.Description("Todo list name"), mcp.Required()),
+		mcp.WithString("patterns", mcp.Description("Comma-separated glob patterns (e.g. 'architecture/*,decisions/db-*'). Omit to clear.")),
+		mcp.WithBoolean("clear", mcp.Description("If true, removes the context field (reverts to project default or all)")),
 	)
 }
 
@@ -540,4 +551,46 @@ func (s *serverCtx) handleKnowledgeDelete(_ context.Context, req mcp.CallToolReq
 	}
 
 	return textResult(fmt.Sprintf("Deleted knowledge/%s.md", filename)), nil
+}
+
+func (s *serverCtx) handleTodoContext(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	proj := req.GetString("project", "")
+	listName := req.GetString("list", "")
+
+	if proj == "" || listName == "" {
+		return errResult("project and list are required")
+	}
+
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	clearFlag := req.GetBool("clear", false)
+
+	if clearFlag {
+		if err := service.SetListContext(dir, listName, nil); err != nil {
+			return errResult("%v", err)
+		}
+		return textResult(fmt.Sprintf("Cleared context on %s (will use project default or all docs)", listName)), nil
+	}
+
+	patternsStr := req.GetString("patterns", "")
+	if patternsStr == "" {
+		return errResult("either patterns or clear=true is required")
+	}
+
+	var patterns []string
+	for _, p := range strings.Split(patternsStr, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			patterns = append(patterns, p)
+		}
+	}
+
+	if err := service.SetListContext(dir, listName, patterns); err != nil {
+		return errResult("%v", err)
+	}
+
+	return textResult(fmt.Sprintf("Set context on %s: %s", listName, strings.Join(patterns, ", "))), nil
 }

@@ -7,11 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/walter/p/internal/ai"
 	"github.com/walter/p/internal/config"
 	"github.com/walter/p/internal/display"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
+	"github.com/walter/p/internal/service"
 	"github.com/walter/p/internal/todo"
 	"github.com/walter/p/internal/validate"
 )
@@ -879,5 +881,169 @@ func TestIntegrationDiffClean(t *testing.T) {
 	}
 	if stat != "" {
 		t.Errorf("git.DiffStat should return empty on clean tree, got:\n%s", stat)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Context scoping integration tests
+// ---------------------------------------------------------------------------
+
+func TestIntegrationSetListContext(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "ctx-proj", "")
+	dir := filepath.Join(root, "ctx-proj")
+
+	list, _ := todo.CreateList(dir, "sprint-1", "Sprint 1")
+	todo.AddItem(list, "Task A", todo.Now, "")
+	todo.SaveList(dir, "sprint-1", list)
+
+	// Set context patterns
+	list, _ = todo.LoadList(dir, "sprint-1")
+	list.Context = []string{"arch/*", "design/**"}
+	todo.SaveList(dir, "sprint-1", list)
+
+	// Reload and verify
+	list, _ = todo.LoadList(dir, "sprint-1")
+	if len(list.Context) != 2 {
+		t.Fatalf("context len = %d, want 2", len(list.Context))
+	}
+	if list.Context[0] != "arch/*" {
+		t.Errorf("context[0] = %q, want %q", list.Context[0], "arch/*")
+	}
+
+	// Clear context
+	list.Context = nil
+	todo.SaveList(dir, "sprint-1", list)
+
+	list, _ = todo.LoadList(dir, "sprint-1")
+	if list.Context != nil {
+		t.Errorf("context should be nil after clear, got %v", list.Context)
+	}
+}
+
+func TestIntegrationSetDefaultContext(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "ctx-proj", "")
+	dir := filepath.Join(root, "ctx-proj")
+
+	// Set default context
+	meta, _ := project.LoadMeta(dir)
+	meta.DefaultContext = []string{"overview", "architecture/*"}
+	project.SaveMeta(dir, meta)
+
+	// Reload and verify
+	meta, _ = project.LoadMeta(dir)
+	if len(meta.DefaultContext) != 2 {
+		t.Fatalf("default_context len = %d, want 2", len(meta.DefaultContext))
+	}
+	if meta.DefaultContext[0] != "overview" {
+		t.Errorf("default_context[0] = %q, want %q", meta.DefaultContext[0], "overview")
+	}
+
+	// Clear
+	meta.DefaultContext = nil
+	project.SaveMeta(dir, meta)
+
+	meta, _ = project.LoadMeta(dir)
+	if meta.DefaultContext != nil {
+		t.Errorf("default_context should be nil after clear, got %v", meta.DefaultContext)
+	}
+}
+
+func TestIntegrationContextResolveFallback(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "ctx-proj", "")
+	dir := filepath.Join(root, "ctx-proj")
+
+	// Create knowledge docs
+	knowledge.Create(dir, "overview", "Overview", nil)
+	knowledge.Create(dir, "architecture", "Architecture", nil)
+	knowledge.Create(dir, "api-design", "API Design", nil)
+
+	// Create a list with context
+	list, _ := todo.CreateList(dir, "focused", "Focused List")
+	list.Context = []string{"api-*"}
+	todo.SaveList(dir, "focused", list)
+
+	// Set project default
+	meta, _ := project.LoadMeta(dir)
+	meta.DefaultContext = []string{"overview"}
+	project.SaveMeta(dir, meta)
+
+	// List with context should use list context (not project default)
+	list, _ = todo.LoadList(dir, "focused")
+	resolved := ai.ResolveContext(dir, list)
+	if len(resolved) != 1 || resolved[0] != "api-*" {
+		t.Errorf("list context should override project default, got %v", resolved)
+	}
+
+	// List without context should fall back to project default
+	list2, _ := todo.CreateList(dir, "general", "General List")
+	todo.SaveList(dir, "general", list2)
+
+	list2, _ = todo.LoadList(dir, "general")
+	resolved = ai.ResolveContext(dir, list2)
+	if len(resolved) != 1 || resolved[0] != "overview" {
+		t.Errorf("no list context should use project default, got %v", resolved)
+	}
+
+	// Nil list should use project default
+	resolved = ai.ResolveContext(dir, nil)
+	if len(resolved) != 1 || resolved[0] != "overview" {
+		t.Errorf("nil list should use project default, got %v", resolved)
+	}
+}
+
+func TestIntegrationServiceSetListContext(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "svc-proj", "")
+	dir := filepath.Join(root, "svc-proj")
+
+	list, _ := todo.CreateList(dir, "tasks", "Tasks")
+	todo.AddItem(list, "Task", todo.Now, "")
+	todo.SaveList(dir, "tasks", list)
+
+	// Use service to set context
+	if err := service.SetListContext(dir, "tasks", []string{"docs/*", "design"}); err != nil {
+		t.Fatalf("SetListContext: %v", err)
+	}
+
+	list, _ = todo.LoadList(dir, "tasks")
+	if len(list.Context) != 2 {
+		t.Fatalf("expected 2 patterns, got %d", len(list.Context))
+	}
+
+	// Use service to clear context
+	if err := service.SetListContext(dir, "tasks", nil); err != nil {
+		t.Fatalf("SetListContext(nil): %v", err)
+	}
+
+	list, _ = todo.LoadList(dir, "tasks")
+	if list.Context != nil {
+		t.Errorf("expected nil after clear, got %v", list.Context)
+	}
+}
+
+func TestIntegrationServiceSetDefaultContext(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "svc-proj", "")
+	dir := filepath.Join(root, "svc-proj")
+
+	if err := service.SetDefaultContext(dir, []string{"overview", "arch/*"}); err != nil {
+		t.Fatalf("SetDefaultContext: %v", err)
+	}
+
+	meta, _ := project.LoadMeta(dir)
+	if len(meta.DefaultContext) != 2 {
+		t.Fatalf("expected 2 patterns, got %d", len(meta.DefaultContext))
+	}
+
+	if err := service.SetDefaultContext(dir, nil); err != nil {
+		t.Fatalf("SetDefaultContext(nil): %v", err)
+	}
+
+	meta, _ = project.LoadMeta(dir)
+	if meta.DefaultContext != nil {
+		t.Errorf("expected nil after clear, got %v", meta.DefaultContext)
 	}
 }

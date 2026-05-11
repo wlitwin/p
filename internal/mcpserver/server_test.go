@@ -613,6 +613,78 @@ func TestTodoAddInvalidProject(t *testing.T) {
 	}
 }
 
+// --- todo_context tests ---
+
+func TestTodoContextSet(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text := callTool(t, ctx, ctx.handleTodoContext, map[string]any{
+		"project":  "test-project",
+		"list":     "tasks",
+		"patterns": "architecture/*,decisions/db-*",
+	})
+
+	if !strings.Contains(text, "Set context") {
+		t.Errorf("expected 'Set context' in output: %s", text)
+	}
+
+	// Verify the context was set on the list
+	dir := filepath.Join(root, "test-project")
+	list, _ := todo.LoadList(dir, "tasks")
+	if len(list.Context) != 2 {
+		t.Fatalf("expected 2 context patterns, got %d", len(list.Context))
+	}
+	if list.Context[0] != "architecture/*" {
+		t.Errorf("context[0] = %q, want %q", list.Context[0], "architecture/*")
+	}
+	if list.Context[1] != "decisions/db-*" {
+		t.Errorf("context[1] = %q, want %q", list.Context[1], "decisions/db-*")
+	}
+}
+
+func TestTodoContextClear(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+	dir := filepath.Join(root, "test-project")
+
+	// First set some context
+	list, _ := todo.LoadList(dir, "tasks")
+	list.Context = []string{"old-pattern"}
+	todo.SaveList(dir, "tasks", list)
+
+	// Clear it via MCP
+	text := callTool(t, ctx, ctx.handleTodoContext, map[string]any{
+		"project": "test-project",
+		"list":    "tasks",
+		"clear":   true,
+	})
+
+	if !strings.Contains(text, "Cleared") {
+		t.Errorf("expected 'Cleared' in output: %s", text)
+	}
+
+	// Verify context is nil
+	list, _ = todo.LoadList(dir, "tasks")
+	if list.Context != nil {
+		t.Errorf("expected nil context after clear, got %v", list.Context)
+	}
+}
+
+func TestTodoContextMissingParams(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// No patterns and no clear flag
+	text, isErr := callToolAllowError(t, ctx, ctx.handleTodoContext, map[string]any{
+		"project": "test-project",
+		"list":    "tasks",
+	})
+	if !isErr {
+		t.Errorf("expected error when no patterns and no clear flag, got: %s", text)
+	}
+}
+
 func TestTodoResolveInvalidID(t *testing.T) {
 	root := setupTestRoot(t)
 	ctx := &serverCtx{projectRoot: root}

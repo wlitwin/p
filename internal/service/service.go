@@ -393,6 +393,30 @@ func removeTags(existing, toRemove []string) []string {
 	return result
 }
 
+// SetListContext loads a list, sets (or clears) its context patterns, and saves.
+// If patterns is nil, the context field is removed (reverts to default/all).
+func SetListContext(dir, listName string, patterns []string) error {
+	list, err := todo.LoadList(dir, listName)
+	if err != nil {
+		return err
+	}
+
+	list.Context = patterns
+	return todo.SaveList(dir, listName, list)
+}
+
+// SetDefaultContext loads project meta, sets (or clears) the default context
+// patterns, and saves.
+func SetDefaultContext(dir string, patterns []string) error {
+	meta, err := project.LoadMeta(dir)
+	if err != nil {
+		return err
+	}
+
+	meta.DefaultContext = patterns
+	return project.SaveMeta(dir, meta)
+}
+
 // Commit is a convenience wrapper around git.CommitAll for callers (like the
 // CLI) that need to commit after a service operation.
 func Commit(dir, message string) error {
