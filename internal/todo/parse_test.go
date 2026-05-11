@@ -875,3 +875,226 @@ func TestParseState(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Context field tests
+// ---------------------------------------------------------------------------
+
+func TestParseContextMultiLine(t *testing.T) {
+	input := `---
+title: DB Migration
+created: 2026-05-11T01:00:00Z
+updated: 2026-05-11T01:00:00Z
+context:
+  - architecture/*
+  - decisions/db-*
+  - runbooks/deploy
+---
+
+# DB Migration
+
+- [ ] Run migration priority=now created=2026-05-11
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if list.Title != "DB Migration" {
+		t.Errorf("Title = %q, want %q", list.Title, "DB Migration")
+	}
+	if len(list.Context) != 3 {
+		t.Fatalf("Context len = %d, want 3", len(list.Context))
+	}
+	want := []string{"architecture/*", "decisions/db-*", "runbooks/deploy"}
+	for i, w := range want {
+		if list.Context[i] != w {
+			t.Errorf("Context[%d] = %q, want %q", i, list.Context[i], w)
+		}
+	}
+	if len(list.Items) != 1 {
+		t.Errorf("Items len = %d, want 1", len(list.Items))
+	}
+}
+
+func TestParseContextSingleValue(t *testing.T) {
+	input := `---
+title: Simple
+created: 2026-05-11T01:00:00Z
+updated: 2026-05-11T01:00:00Z
+context: overview
+---
+
+# Simple
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if len(list.Context) != 1 {
+		t.Fatalf("Context len = %d, want 1", len(list.Context))
+	}
+	if list.Context[0] != "overview" {
+		t.Errorf("Context[0] = %q, want %q", list.Context[0], "overview")
+	}
+}
+
+func TestParseContextEmptyList(t *testing.T) {
+	input := `---
+title: No Docs
+created: 2026-05-11T01:00:00Z
+updated: 2026-05-11T01:00:00Z
+context: []
+---
+
+# No Docs
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if list.Context == nil {
+		t.Fatal("Context should be non-nil (empty slice), got nil")
+	}
+	if len(list.Context) != 0 {
+		t.Errorf("Context len = %d, want 0", len(list.Context))
+	}
+}
+
+func TestParseContextNil(t *testing.T) {
+	input := `---
+title: Default
+created: 2026-05-11T01:00:00Z
+updated: 2026-05-11T01:00:00Z
+---
+
+# Default
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if list.Context != nil {
+		t.Errorf("Context should be nil when not specified, got %v", list.Context)
+	}
+}
+
+func TestRenderContextMultiLine(t *testing.T) {
+	list := &List{
+		Title:   "With Context",
+		Context: []string{"architecture/*", "decisions/db-*"},
+	}
+	rendered := Render(list)
+
+	if !strings.Contains(rendered, "context:\n") {
+		t.Error("should contain 'context:' header")
+	}
+	if !strings.Contains(rendered, "  - architecture/*\n") {
+		t.Error("should contain architecture/* pattern")
+	}
+	if !strings.Contains(rendered, "  - decisions/db-*\n") {
+		t.Error("should contain decisions/db-* pattern")
+	}
+}
+
+func TestRenderContextEmptyList(t *testing.T) {
+	list := &List{
+		Title:   "Empty Context",
+		Context: []string{},
+	}
+	rendered := Render(list)
+
+	if !strings.Contains(rendered, "context: []\n") {
+		t.Errorf("should contain 'context: []', got:\n%s", rendered)
+	}
+}
+
+func TestRenderContextNil(t *testing.T) {
+	list := &List{
+		Title: "No Context",
+	}
+	rendered := Render(list)
+
+	if strings.Contains(rendered, "context") {
+		t.Errorf("should not contain 'context' when nil, got:\n%s", rendered)
+	}
+}
+
+func TestContextRoundTrip(t *testing.T) {
+	tests := []struct {
+		name    string
+		context []string
+	}{
+		{"nil context", nil},
+		{"empty context", []string{}},
+		{"single pattern", []string{"overview"}},
+		{"multiple patterns", []string{"architecture/*", "decisions/db-*", "runbooks/deploy"}},
+		{"wildcard patterns", []string{"*", "**"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			list := &List{
+				Title:   "Round Trip",
+				Created: time.Date(2026, 5, 11, 1, 0, 0, 0, time.UTC),
+				Updated: time.Date(2026, 5, 11, 2, 0, 0, 0, time.UTC),
+				Context: tt.context,
+			}
+			AddItem(list, "Task", Now, "")
+
+			rendered := Render(list)
+			parsed, err := Parse(rendered)
+			if err != nil {
+				t.Fatalf("Parse(Render()) error: %v", err)
+			}
+
+			if tt.context == nil {
+				if parsed.Context != nil {
+					t.Errorf("expected nil context, got %v", parsed.Context)
+				}
+			} else {
+				if parsed.Context == nil {
+					t.Fatalf("expected non-nil context, got nil")
+				}
+				if len(parsed.Context) != len(tt.context) {
+					t.Fatalf("context len = %d, want %d", len(parsed.Context), len(tt.context))
+				}
+				for i, want := range tt.context {
+					if parsed.Context[i] != want {
+						t.Errorf("context[%d] = %q, want %q", i, parsed.Context[i], want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestContextSaveLoadRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	original := &List{
+		Title:   "Context Test",
+		Created: time.Now().UTC(),
+		Context: []string{"arch/*", "design/**"},
+	}
+	AddItem(original, "Do something", Now, "")
+
+	if err := SaveList(dir, "ctx-test", original); err != nil {
+		t.Fatalf("SaveList error: %v", err)
+	}
+
+	loaded, err := LoadList(dir, "ctx-test")
+	if err != nil {
+		t.Fatalf("LoadList error: %v", err)
+	}
+
+	if len(loaded.Context) != 2 {
+		t.Fatalf("Context len = %d, want 2", len(loaded.Context))
+	}
+	if loaded.Context[0] != "arch/*" {
+		t.Errorf("Context[0] = %q, want %q", loaded.Context[0], "arch/*")
+	}
+	if loaded.Context[1] != "design/**" {
+		t.Errorf("Context[1] = %q, want %q", loaded.Context[1], "design/**")
+	}
+}

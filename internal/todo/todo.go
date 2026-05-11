@@ -44,6 +44,7 @@ type List struct {
 	Title   string
 	Created time.Time
 	Updated time.Time
+	Context []string // knowledge doc glob patterns for AI context scoping
 	Items   []*Item
 }
 

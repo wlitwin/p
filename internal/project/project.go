@@ -10,11 +10,12 @@ import (
 )
 
 type ProjectMeta struct {
-	Name        string    `yaml:"name"`
-	Created     time.Time `yaml:"created"`
-	Archived    bool      `yaml:"archived"`
-	Description string    `yaml:"description,omitempty"`
-	CodeDir     string    `yaml:"code_dir,omitempty"`
+	Name           string    `yaml:"name"`
+	Created        time.Time `yaml:"created"`
+	Archived       bool      `yaml:"archived"`
+	Description    string    `yaml:"description,omitempty"`
+	CodeDir        string    `yaml:"code_dir,omitempty"`
+	DefaultContext []string  `yaml:"default_context,omitempty"`
 }
 
 func Create(root, name, description string) error {

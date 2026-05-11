@@ -3,6 +3,7 @@ package project
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -283,5 +284,103 @@ func TestCreateWithDescription(t *testing.T) {
 
 	if meta.Description != desc {
 		t.Errorf("Description = %q, want %q", meta.Description, desc)
+	}
+}
+
+func TestDefaultContextSaveLoad(t *testing.T) {
+	root := t.TempDir()
+	name := "ctx-project"
+
+	if err := Create(root, name, ""); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	projectDir := filepath.Join(root, name)
+	meta, err := LoadMeta(projectDir)
+	if err != nil {
+		t.Fatalf("LoadMeta failed: %v", err)
+	}
+
+	// Initially nil
+	if meta.DefaultContext != nil {
+		t.Errorf("DefaultContext should be nil initially, got %v", meta.DefaultContext)
+	}
+
+	// Set and save
+	meta.DefaultContext = []string{"overview", "architecture/*"}
+	if err := SaveMeta(projectDir, meta); err != nil {
+		t.Fatalf("SaveMeta failed: %v", err)
+	}
+
+	reloaded, err := LoadMeta(projectDir)
+	if err != nil {
+		t.Fatalf("LoadMeta after save failed: %v", err)
+	}
+
+	if len(reloaded.DefaultContext) != 2 {
+		t.Fatalf("DefaultContext len = %d, want 2", len(reloaded.DefaultContext))
+	}
+	if reloaded.DefaultContext[0] != "overview" {
+		t.Errorf("DefaultContext[0] = %q, want %q", reloaded.DefaultContext[0], "overview")
+	}
+	if reloaded.DefaultContext[1] != "architecture/*" {
+		t.Errorf("DefaultContext[1] = %q, want %q", reloaded.DefaultContext[1], "architecture/*")
+	}
+}
+
+func TestDefaultContextOmittedWhenEmpty(t *testing.T) {
+	root := t.TempDir()
+	name := "no-ctx"
+
+	if err := Create(root, name, ""); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	projectDir := filepath.Join(root, name)
+
+	// Read raw config to verify default_context is not present
+	data, err := os.ReadFile(filepath.Join(projectDir, ".p", "config.yaml"))
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+
+	if strings.Contains(string(data), "default_context") {
+		t.Errorf("config.yaml should not contain default_context when nil, got:\n%s", string(data))
+	}
+}
+
+func TestDefaultContextClearRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	name := "clear-ctx"
+
+	if err := Create(root, name, ""); err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	projectDir := filepath.Join(root, name)
+	meta, err := LoadMeta(projectDir)
+	if err != nil {
+		t.Fatalf("LoadMeta failed: %v", err)
+	}
+
+	// Set context
+	meta.DefaultContext = []string{"docs/*"}
+	if err := SaveMeta(projectDir, meta); err != nil {
+		t.Fatalf("SaveMeta failed: %v", err)
+	}
+
+	// Clear context
+	meta.DefaultContext = nil
+	if err := SaveMeta(projectDir, meta); err != nil {
+		t.Fatalf("SaveMeta (clear) failed: %v", err)
+	}
+
+	reloaded, err := LoadMeta(projectDir)
+	if err != nil {
+		t.Fatalf("LoadMeta after clear failed: %v", err)
+	}
+
+	if reloaded.DefaultContext != nil {
+		t.Errorf("DefaultContext should be nil after clear, got %v", reloaded.DefaultContext)
 	}
 }

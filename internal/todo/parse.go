@@ -25,9 +25,7 @@ func Parse(content string) (*List, error) {
 			if trimmed == "---" {
 				if inFrontmatter {
 					frontmatterDone = true
-					for _, fl := range frontmatterLines {
-						parseFrontmatterLine(list, fl)
-					}
+					parseFrontmatter(list, frontmatterLines)
 					continue
 				}
 				inFrontmatter = true
@@ -50,25 +48,49 @@ func Parse(content string) (*List, error) {
 	return list, nil
 }
 
-func parseFrontmatterLine(list *List, line string) {
-	parts := strings.SplitN(line, ":", 2)
-	if len(parts) != 2 {
-		return
-	}
-	key := strings.TrimSpace(parts[0])
-	val := strings.TrimSpace(parts[1])
+func parseFrontmatter(list *List, lines []string) {
+	i := 0
+	for i < len(lines) {
+		line := lines[i]
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			i++
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
 
-	switch key {
-	case "title":
-		list.Title = val
-	case "created":
-		if t, err := time.Parse(time.RFC3339, val); err == nil {
-			list.Created = t
+		switch key {
+		case "title":
+			list.Title = val
+		case "created":
+			if t, err := time.Parse(time.RFC3339, val); err == nil {
+				list.Created = t
+			}
+		case "updated":
+			if t, err := time.Parse(time.RFC3339, val); err == nil {
+				list.Updated = t
+			}
+		case "context":
+			if val == "" {
+				// Multi-line YAML list: collect "- value" lines
+				var patterns []string
+				for i+1 < len(lines) && strings.HasPrefix(lines[i+1], "- ") {
+					i++
+					patterns = append(patterns, strings.TrimSpace(strings.TrimPrefix(lines[i], "- ")))
+				}
+				if len(patterns) > 0 {
+					list.Context = patterns
+				}
+			} else if val == "[]" {
+				// Explicit empty list
+				list.Context = []string{}
+			} else {
+				// Single value on same line
+				list.Context = []string{val}
+			}
 		}
-	case "updated":
-		if t, err := time.Parse(time.RFC3339, val); err == nil {
-			list.Updated = t
-		}
+		i++
 	}
 }
 
@@ -161,6 +183,16 @@ func Render(list *List) string {
 	fmt.Fprintf(&sb, "title: %s\n", list.Title)
 	fmt.Fprintf(&sb, "created: %s\n", list.Created.Format(time.RFC3339))
 	fmt.Fprintf(&sb, "updated: %s\n", list.Updated.Format(time.RFC3339))
+	if list.Context != nil {
+		if len(list.Context) == 0 {
+			sb.WriteString("context: []\n")
+		} else {
+			sb.WriteString("context:\n")
+			for _, p := range list.Context {
+				fmt.Fprintf(&sb, "  - %s\n", p)
+			}
+		}
+	}
 	sb.WriteString("---\n\n")
 	fmt.Fprintf(&sb, "# %s\n", list.Title)
 
