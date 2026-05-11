@@ -118,12 +118,13 @@ func assetRemoveTool() mcp.Tool {
 // --- Handlers ---
 
 func (s *serverCtx) handleProjectCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	name := req.GetString("name", "")
-	if name == "" {
-		return errResult("name is required")
+	p := newParams(req)
+	name := p.require("name")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
-	desc := req.GetString("description", "")
+	desc := p.optional("description", "")
 
 	if err := service.ProjectCreate(ctx, s.projectRoot, name, desc); err != nil {
 		return errResult("%v", err)
@@ -133,12 +134,13 @@ func (s *serverCtx) handleProjectCreate(ctx context.Context, req mcp.CallToolReq
 }
 
 func (s *serverCtx) handleProjectArchive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	if proj == "" {
-		return errResult("project is required")
+	p := newParams(req)
+	proj := p.require("project")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
-	archived := req.GetBool("archived", true)
+	archived := p.optionalBool("archived", true)
 
 	dir, r, err := s.resolve(proj)
 	if r != nil {
@@ -157,7 +159,8 @@ func (s *serverCtx) handleProjectArchive(ctx context.Context, req mcp.CallToolRe
 }
 
 func (s *serverCtx) handleStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
+	p := newParams(req)
+	proj := p.optional("project", "")
 
 	if proj != "" {
 		return s.projectStatus(ctx, proj)
@@ -207,12 +210,13 @@ func (s *serverCtx) projectStatus(ctx context.Context, proj string) (*mcp.CallTo
 }
 
 func (s *serverCtx) handleSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	query := req.GetString("query", "")
-	if query == "" {
-		return errResult("query is required")
+	p := newParams(req)
+	query := p.require("query")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
-	proj := req.GetString("project", "")
+	proj := p.optional("project", "")
 	queryLower := strings.ToLower(query)
 
 	var projectNames []string
@@ -253,13 +257,13 @@ func (s *serverCtx) handleSearch(ctx context.Context, req mcp.CallToolRequest) (
 }
 
 func (s *serverCtx) handleTodoPriority(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-	itemID := req.GetString("item_id", "")
-	priority := req.GetString("priority", "")
-
-	if proj == "" || listName == "" || itemID == "" || priority == "" {
-		return errResult("project, list, item_id, and priority are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	itemID := p.require("item_id")
+	priority := p.require("priority")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	if err := validate.Priority(priority); err != nil {
@@ -279,13 +283,13 @@ func (s *serverCtx) handleTodoPriority(ctx context.Context, req mcp.CallToolRequ
 }
 
 func (s *serverCtx) handleTodoDue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-	itemID := req.GetString("item_id", "")
-	due := req.GetString("due", "")
-
-	if proj == "" || listName == "" || itemID == "" || due == "" {
-		return errResult("project, list, item_id, and due are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	itemID := p.require("item_id")
+	due := p.require("due")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -301,11 +305,11 @@ func (s *serverCtx) handleTodoDue(ctx context.Context, req mcp.CallToolRequest) 
 }
 
 func (s *serverCtx) handleTodoRmList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-
-	if proj == "" || listName == "" {
-		return errResult("project and list are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -321,9 +325,10 @@ func (s *serverCtx) handleTodoRmList(ctx context.Context, req mcp.CallToolReques
 }
 
 func (s *serverCtx) handleKnowledgeList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	if proj == "" {
-		return errResult("project is required")
+	p := newParams(req)
+	proj := p.require("project")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -339,7 +344,7 @@ func (s *serverCtx) handleKnowledgeList(ctx context.Context, req mcp.CallToolReq
 		return textResult("No knowledge documents."), nil
 	}
 
-	tagFilter := req.GetString("tag", "")
+	tagFilter := p.optional("tag", "")
 
 	var sb strings.Builder
 	for _, f := range files {
@@ -367,11 +372,11 @@ func (s *serverCtx) handleKnowledgeList(ctx context.Context, req mcp.CallToolReq
 }
 
 func (s *serverCtx) handleKnowledgeSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	query := req.GetString("query", "")
-
-	if proj == "" || query == "" {
-		return errResult("project and query are required")
+	p := newParams(req)
+	proj := p.require("project")
+	query := p.require("query")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -396,11 +401,11 @@ func (s *serverCtx) handleKnowledgeSearch(ctx context.Context, req mcp.CallToolR
 }
 
 func (s *serverCtx) handleAssetAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	srcPath := req.GetString("source_path", "")
-
-	if proj == "" || srcPath == "" {
-		return errResult("project and source_path are required")
+	p := newParams(req)
+	proj := p.require("project")
+	srcPath := p.require("source_path")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -417,9 +422,10 @@ func (s *serverCtx) handleAssetAdd(ctx context.Context, req mcp.CallToolRequest)
 }
 
 func (s *serverCtx) handleAssetList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	if proj == "" {
-		return errResult("project is required")
+	p := newParams(req)
+	proj := p.require("project")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -444,11 +450,11 @@ func (s *serverCtx) handleAssetList(ctx context.Context, req mcp.CallToolRequest
 }
 
 func (s *serverCtx) handleAssetRemove(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	filename := req.GetString("filename", "")
-
-	if proj == "" || filename == "" {
-		return errResult("project and filename are required")
+	p := newParams(req)
+	proj := p.require("project")
+	filename := p.require("filename")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)

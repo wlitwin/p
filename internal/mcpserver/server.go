@@ -276,7 +276,12 @@ func (s *serverCtx) handleProjectList(ctx context.Context, _ mcp.CallToolRequest
 }
 
 func (s *serverCtx) handleTodoList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
+	p := newParams(req)
+	proj := p.require("project")
+	if r := p.error(); r != nil {
+		return r, nil
+	}
+
 	dir, r, err := s.resolve(proj)
 	if r != nil {
 		return r, err
@@ -302,7 +307,12 @@ func (s *serverCtx) handleTodoList(ctx context.Context, req mcp.CallToolRequest)
 }
 
 func (s *serverCtx) handleKnowledgeRead(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
+	p := newParams(req)
+	proj := p.require("project")
+	if r := p.error(); r != nil {
+		return r, nil
+	}
+
 	dir, r, err := s.resolve(proj)
 	if r != nil {
 		return r, err
@@ -328,12 +338,12 @@ func (s *serverCtx) handleKnowledgeRead(ctx context.Context, req mcp.CallToolReq
 }
 
 func (s *serverCtx) handleTodoAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-	text := req.GetString("text", "")
-
-	if proj == "" || listName == "" || text == "" {
-		return errResult("project, list, and text are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	text := p.require("text")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -341,9 +351,9 @@ func (s *serverCtx) handleTodoAdd(ctx context.Context, req mcp.CallToolRequest) 
 		return r, err
 	}
 
-	priority := todo.Priority(req.GetString("priority", "now"))
-	due := req.GetString("due", "")
-	parentID := req.GetString("parent_id", "")
+	priority := todo.Priority(p.optional("priority", "now"))
+	due := p.optional("due", "")
+	parentID := p.optional("parent_id", "")
 
 	if err := service.AddItem(ctx, dir, listName, text, priority, due, parentID); err != nil {
 		return errResult("%v", err)
@@ -353,13 +363,13 @@ func (s *serverCtx) handleTodoAdd(ctx context.Context, req mcp.CallToolRequest) 
 }
 
 func (s *serverCtx) handleTodoUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-	itemID := req.GetString("item_id", "")
-	text := req.GetString("text", "")
-
-	if proj == "" || listName == "" || itemID == "" || text == "" {
-		return errResult("project, list, item_id, and text are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	itemID := p.require("item_id")
+	text := p.require("text")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -375,13 +385,13 @@ func (s *serverCtx) handleTodoUpdate(ctx context.Context, req mcp.CallToolReques
 }
 
 func (s *serverCtx) handleTodoState(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-	itemID := req.GetString("item_id", "")
-	state := req.GetString("state", "")
-
-	if proj == "" || listName == "" || itemID == "" || state == "" {
-		return errResult("project, list, item_id, and state are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	itemID := p.require("item_id")
+	state := p.require("state")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	if err := validate.State(state); err != nil {
@@ -401,12 +411,12 @@ func (s *serverCtx) handleTodoState(ctx context.Context, req mcp.CallToolRequest
 }
 
 func (s *serverCtx) handleTodoRemove(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-	itemID := req.GetString("item_id", "")
-
-	if proj == "" || listName == "" || itemID == "" {
-		return errResult("project, list, and item_id are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	itemID := p.require("item_id")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -422,12 +432,12 @@ func (s *serverCtx) handleTodoRemove(ctx context.Context, req mcp.CallToolReques
 }
 
 func (s *serverCtx) handleKnowledgeCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	filename := req.GetString("filename", "")
-	title := req.GetString("title", "")
-
-	if proj == "" || filename == "" || title == "" {
-		return errResult("project, filename, and title are required")
+	p := newParams(req)
+	proj := p.require("project")
+	filename := p.require("filename")
+	title := p.require("title")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -436,7 +446,7 @@ func (s *serverCtx) handleKnowledgeCreate(ctx context.Context, req mcp.CallToolR
 	}
 
 	var tags []string
-	if t := req.GetString("tags", ""); t != "" {
+	if t := p.optional("tags", ""); t != "" {
 		tags = strings.Split(t, ",")
 		for i := range tags {
 			tags[i] = strings.TrimSpace(tags[i])
@@ -451,12 +461,12 @@ func (s *serverCtx) handleKnowledgeCreate(ctx context.Context, req mcp.CallToolR
 }
 
 func (s *serverCtx) handleKnowledgeAppend(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	filename := req.GetString("filename", "")
-	content := req.GetString("content", "")
-
-	if proj == "" || filename == "" || content == "" {
-		return errResult("project, filename, and content are required")
+	p := newParams(req)
+	proj := p.require("project")
+	filename := p.require("filename")
+	content := p.require("content")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -464,7 +474,7 @@ func (s *serverCtx) handleKnowledgeAppend(ctx context.Context, req mcp.CallToolR
 		return r, err
 	}
 
-	section := req.GetString("section", "")
+	section := p.optional("section", "")
 
 	if err := service.KnowledgeAppend(ctx, dir, filename, content, section); err != nil {
 		return errResult("%v", err)
@@ -474,13 +484,13 @@ func (s *serverCtx) handleKnowledgeAppend(ctx context.Context, req mcp.CallToolR
 }
 
 func (s *serverCtx) handleKnowledgeReplace(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	filename := req.GetString("filename", "")
-	section := req.GetString("section", "")
-	content := req.GetString("content", "")
-
-	if proj == "" || filename == "" || section == "" || content == "" {
-		return errResult("project, filename, section, and content are required")
+	p := newParams(req)
+	proj := p.require("project")
+	filename := p.require("filename")
+	section := p.require("section")
+	content := p.require("content")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -496,12 +506,12 @@ func (s *serverCtx) handleKnowledgeReplace(ctx context.Context, req mcp.CallTool
 }
 
 func (s *serverCtx) handleKnowledgeRename(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	oldName := req.GetString("old_filename", "")
-	newName := req.GetString("new_filename", "")
-
-	if proj == "" || oldName == "" || newName == "" {
-		return errResult("project, old_filename, and new_filename are required")
+	p := newParams(req)
+	proj := p.require("project")
+	oldName := p.require("old_filename")
+	newName := p.require("new_filename")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -517,13 +527,13 @@ func (s *serverCtx) handleKnowledgeRename(ctx context.Context, req mcp.CallToolR
 }
 
 func (s *serverCtx) handleTodoMove(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-	itemID := req.GetString("item_id", "")
-	targetList := req.GetString("target_list", "")
-
-	if proj == "" || listName == "" || itemID == "" || targetList == "" {
-		return errResult("project, list, item_id, and target_list are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	itemID := p.require("item_id")
+	targetList := p.require("target_list")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -539,11 +549,11 @@ func (s *serverCtx) handleTodoMove(ctx context.Context, req mcp.CallToolRequest)
 }
 
 func (s *serverCtx) handleKnowledgeDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	filename := req.GetString("filename", "")
-
-	if proj == "" || filename == "" {
-		return errResult("project and filename are required")
+	p := newParams(req)
+	proj := p.require("project")
+	filename := p.require("filename")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -566,11 +576,11 @@ func (s *serverCtx) handleKnowledgeDelete(ctx context.Context, req mcp.CallToolR
 }
 
 func (s *serverCtx) handleTodoContext(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	proj := req.GetString("project", "")
-	listName := req.GetString("list", "")
-
-	if proj == "" || listName == "" {
-		return errResult("project and list are required")
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	if r := p.error(); r != nil {
+		return r, nil
 	}
 
 	dir, r, err := s.resolve(proj)
@@ -578,7 +588,7 @@ func (s *serverCtx) handleTodoContext(ctx context.Context, req mcp.CallToolReque
 		return r, err
 	}
 
-	clearFlag := req.GetBool("clear", false)
+	clearFlag := p.optionalBool("clear", false)
 
 	if clearFlag {
 		if err := service.SetListContext(ctx, dir, listName, nil); err != nil {
@@ -587,7 +597,7 @@ func (s *serverCtx) handleTodoContext(ctx context.Context, req mcp.CallToolReque
 		return textResult(fmt.Sprintf("Cleared context on %s (will use project default or all docs)", listName)), nil
 	}
 
-	patternsStr := req.GetString("patterns", "")
+	patternsStr := p.optional("patterns", "")
 	if patternsStr == "" {
 		return errResult("either patterns or clear=true is required")
 	}
