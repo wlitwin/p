@@ -30,6 +30,9 @@ var listCmd = &cobra.Command{
 		case 1:
 			return listTodoLists(args[0])
 		case 2:
+			if args[1] == "*" {
+				return listAllItems(args[0], cmd)
+			}
 			return listItems(args[0], args[1], cmd)
 		}
 		return nil
@@ -126,6 +129,41 @@ func listTodoLists(projectName string) error {
 			}
 			fmt.Printf("  %-20s  %s\n", f, size)
 		}
+	}
+	return nil
+}
+
+func listAllItems(projectName string, cmd *cobra.Command) error {
+	dir, err := project.Resolve(cfg.ProjectRoot, projectName)
+	if err != nil {
+		return err
+	}
+
+	names, err := todo.ListNames(dir)
+	if err != nil {
+		return err
+	}
+
+	stateFilter, _ := cmd.Flags().GetString("state")
+	priorityFilter, _ := cmd.Flags().GetString("priority")
+	tagFilter, _ := cmd.Flags().GetString("tag")
+
+	for i, name := range names {
+		list, err := todo.LoadList(dir, name)
+		if err != nil {
+			continue
+		}
+
+		filtered := filterItems(list.Items, stateFilter, priorityFilter, tagFilter)
+		if len(filtered) == 0 {
+			continue
+		}
+
+		if i > 0 {
+			fmt.Println()
+		}
+		fmt.Printf("%s\n\n", tui.Bold.Render("# "+name))
+		printItems(filtered, "", 1, dir)
 	}
 	return nil
 }
