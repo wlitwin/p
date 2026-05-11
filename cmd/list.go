@@ -106,7 +106,7 @@ func listTodoLists(projectName string) error {
 			fmt.Printf("  %s (error loading)\n", name)
 			continue
 		}
-		open, done, blocked := countStates(list.Items)
+		open, done, blocked := todo.CountStates(list.Items)
 		fmt.Printf("  %-20s  open=%-3d blocked=%-3d done=%-3d\n", name, open, blocked, done)
 	}
 
@@ -281,24 +281,6 @@ func printItems(items []*todo.Item, prefix string, start int, projectDir ...stri
 			printItems(item.Children, id+".", 1, dir)
 		}
 	}
-}
-
-func countStates(items []*todo.Item) (open, done, blocked int) {
-	for _, item := range items {
-		switch item.State {
-		case todo.Open:
-			open++
-		case todo.Done:
-			done++
-		case todo.Blocked:
-			blocked++
-		}
-		co, cd, cb := countStates(item.Children)
-		open += co
-		done += cd
-		blocked += cb
-	}
-	return
 }
 
 func init() {

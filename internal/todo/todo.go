@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+// StateMarker returns the markdown checkbox marker for a state.
+func StateMarker(s State) string {
+	return stateMarker(s)
+}
+
 type State string
 
 const (
@@ -211,6 +216,54 @@ func DeepCopyItem(item *Item) *Item {
 		}
 	}
 	return &cp
+}
+
+// CountStates recursively counts items by state.
+func CountStates(items []*Item) (open, done, blocked int) {
+	for _, item := range items {
+		switch item.State {
+		case Open:
+			open++
+		case Done:
+			done++
+		case Blocked:
+			blocked++
+		}
+		co, cd, cb := CountStates(item.Children)
+		open += co
+		done += cd
+		blocked += cb
+	}
+	return
+}
+
+// SearchResult holds a matched item with its location metadata.
+type SearchResult struct {
+	ProjectName string
+	ListName    string
+	ItemID      string
+	Item        *Item
+}
+
+// SearchItems recursively searches items for a query string (case-insensitive)
+// and returns matching results with positional IDs.
+func SearchItems(items []*Item, projectName, listName, prefix string, start int, queryLower string) []SearchResult {
+	var results []SearchResult
+	for i, item := range items {
+		id := fmt.Sprintf("%s%d", prefix, start+i)
+		if strings.Contains(strings.ToLower(item.Text), queryLower) {
+			results = append(results, SearchResult{
+				ProjectName: projectName,
+				ListName:    listName,
+				ItemID:      id,
+				Item:        item,
+			})
+		}
+		if len(item.Children) > 0 {
+			results = append(results, SearchItems(item.Children, projectName, listName, id+".", 1, queryLower)...)
+		}
+	}
+	return results
 }
 
 func SetState(item *Item, state State) {

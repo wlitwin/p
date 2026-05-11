@@ -9,6 +9,7 @@ import (
 	"github.com/walter/p/internal/ai"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/project"
+	"github.com/walter/p/internal/service"
 	"github.com/walter/p/internal/todo"
 	"github.com/walter/p/internal/tui"
 )
@@ -123,14 +124,6 @@ Use --ai to have the AI agent decide placement and wording.`,
 			}
 		}
 
-		list, err := todo.LoadList(dir, listName)
-		if err != nil {
-			list, err = todo.CreateList(dir, listName, listName)
-			if err != nil {
-				return err
-			}
-		}
-
 		priority, _ := cmd.Flags().GetString("priority")
 		if priority == "" {
 			priority = cfg.DefaultPriority
@@ -140,13 +133,11 @@ Use --ai to have the AI agent decide placement and wording.`,
 		}
 		dueDate, _ := cmd.Flags().GetString("due")
 
-		todo.AddItem(list, text, todo.Priority(priority), dueDate)
-
-		if err := todo.SaveList(dir, listName, list); err != nil {
+		if err := service.AddItem(dir, listName, text, todo.Priority(priority), dueDate, ""); err != nil {
 			return err
 		}
 
-		if err := git.CommitAll(dir, fmt.Sprintf("p: add todo %q to %s", text, listName)); err != nil {
+		if err := service.Commit(dir, fmt.Sprintf("p: add todo %q to %s", text, listName)); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
 
@@ -181,7 +172,7 @@ func pickList(projectDir string) (string, error) {
 		list, loadErr := todo.LoadList(projectDir, n)
 		desc := ""
 		if loadErr == nil {
-			open, _, blocked := countStates(list.Items)
+			open, _, blocked := todo.CountStates(list.Items)
 			desc = fmt.Sprintf("open=%d blocked=%d", open, blocked)
 		}
 		items = append(items, tui.PickerItem{Label: n, Desc: desc})

@@ -10,6 +10,7 @@ import (
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/lock"
 	"github.com/walter/p/internal/project"
+	"github.com/walter/p/internal/service"
 	"github.com/walter/p/internal/todo"
 	"github.com/walter/p/internal/validate"
 )
@@ -94,6 +95,20 @@ func (s *serverCtx) locked(handler toolHandler) toolHandler {
 
 		return handler(ctx, req)
 	}
+}
+
+// resolve resolves a project name to its directory, returning an errResult on failure.
+func (s *serverCtx) resolve(proj string) (string, *mcp.CallToolResult, error) {
+	if proj == "" {
+		r, err := errResult("project is required")
+		return "", r, err
+	}
+	dir, err := project.Resolve(s.projectRoot, proj)
+	if err != nil {
+		r, e := errResult("%v", err)
+		return "", r, e
+	}
+	return dir, nil, nil
 }
 
 // --- Tool definitions --- Project tools ---
@@ -246,13 +261,9 @@ func (s *serverCtx) handleProjectList(_ context.Context, _ mcp.CallToolRequest) 
 
 func (s *serverCtx) handleTodoList(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
-	if proj == "" {
-		return errResult("project is required")
-	}
-
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
-		return errResult("%v", err)
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
 	}
 
 	listName := req.GetString("list", "")
@@ -276,13 +287,9 @@ func (s *serverCtx) handleTodoList(_ context.Context, req mcp.CallToolRequest) (
 
 func (s *serverCtx) handleKnowledgeRead(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
-	if proj == "" {
-		return errResult("project is required")
-	}
-
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
-		return errResult("%v", err)
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
 	}
 
 	filename := req.GetString("filename", "")
@@ -312,40 +319,18 @@ func (s *serverCtx) handleTodoAdd(_ context.Context, req mcp.CallToolRequest) (*
 	if proj == "" || listName == "" || text == "" {
 		return errResult("project, list, and text are required")
 	}
-	if err := validate.ListName(listName); err != nil {
-		return errResult("%v", err)
-	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
-		return errResult("%v", err)
-	}
-
-	list, err := todo.LoadList(dir, listName)
-	if err != nil {
-		list, err = todo.CreateList(dir, listName, listName)
-		if err != nil {
-			return errResult("creating list: %v", err)
-		}
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
 	}
 
 	priority := todo.Priority(req.GetString("priority", "now"))
 	due := req.GetString("due", "")
 	parentID := req.GetString("parent_id", "")
 
-	item := todo.AddItem(list, text, priority, due)
-
-	if parentID != "" {
-		parent, err := todo.ResolveItem(list, parentID)
-		if err != nil {
-			return errResult("resolving parent: %v", err)
-		}
-		list.Items = list.Items[:len(list.Items)-1]
-		parent.Children = append(parent.Children, item)
-	}
-
-	if err := todo.SaveList(dir, listName, list); err != nil {
-		return errResult("saving list: %v", err)
+	if err := service.AddItem(dir, listName, text, priority, due, parentID); err != nil {
+		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Added todo: %s", text)), nil
@@ -361,25 +346,13 @@ func (s *serverCtx) handleTodoUpdate(_ context.Context, req mcp.CallToolRequest)
 		return errResult("project, list, item_id, and text are required")
 	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	if err := service.UpdateItemText(dir, listName, itemID, text); err != nil {
 		return errResult("%v", err)
-	}
-
-	list, err := todo.LoadList(dir, listName)
-	if err != nil {
-		return errResult("loading list: %v", err)
-	}
-
-	item, err := todo.ResolveItem(list, itemID)
-	if err != nil {
-		return errResult("%v", err)
-	}
-
-	item.Text = text
-
-	if err := todo.SaveList(dir, listName, list); err != nil {
-		return errResult("saving list: %v", err)
 	}
 
 	return textResult(fmt.Sprintf("Updated %s #%s", listName, itemID)), nil
@@ -399,25 +372,13 @@ func (s *serverCtx) handleTodoState(_ context.Context, req mcp.CallToolRequest) 
 		return errResult("%v", err)
 	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	if err := service.SetItemState(dir, listName, itemID, todo.State(state)); err != nil {
 		return errResult("%v", err)
-	}
-
-	list, err := todo.LoadList(dir, listName)
-	if err != nil {
-		return errResult("loading list: %v", err)
-	}
-
-	item, err := todo.ResolveItem(list, itemID)
-	if err != nil {
-		return errResult("%v", err)
-	}
-
-	todo.SetState(item, todo.State(state))
-
-	if err := todo.SaveList(dir, listName, list); err != nil {
-		return errResult("saving list: %v", err)
 	}
 
 	return textResult(fmt.Sprintf("Set %s #%s to %s", listName, itemID, state)), nil
@@ -432,22 +393,13 @@ func (s *serverCtx) handleTodoRemove(_ context.Context, req mcp.CallToolRequest)
 		return errResult("project, list, and item_id are required")
 	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	if err := service.RemoveItem(dir, listName, itemID); err != nil {
 		return errResult("%v", err)
-	}
-
-	list, err := todo.LoadList(dir, listName)
-	if err != nil {
-		return errResult("loading list: %v", err)
-	}
-
-	if err := todo.RemoveItem(list, itemID); err != nil {
-		return errResult("%v", err)
-	}
-
-	if err := todo.SaveList(dir, listName, list); err != nil {
-		return errResult("saving list: %v", err)
 	}
 
 	return textResult(fmt.Sprintf("Removed %s #%s", listName, itemID)), nil
@@ -461,13 +413,10 @@ func (s *serverCtx) handleKnowledgeCreate(_ context.Context, req mcp.CallToolReq
 	if proj == "" || filename == "" || title == "" {
 		return errResult("project, filename, and title are required")
 	}
-	if err := validate.Filename(filename); err != nil {
-		return errResult("%v", err)
-	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
-		return errResult("%v", err)
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
 	}
 
 	var tags []string
@@ -478,7 +427,7 @@ func (s *serverCtx) handleKnowledgeCreate(_ context.Context, req mcp.CallToolReq
 		}
 	}
 
-	if err := knowledge.Create(dir, filename, title, tags); err != nil {
+	if err := service.KnowledgeCreate(dir, filename, title, tags); err != nil {
 		return errResult("%v", err)
 	}
 
@@ -494,14 +443,14 @@ func (s *serverCtx) handleKnowledgeAppend(_ context.Context, req mcp.CallToolReq
 		return errResult("project, filename, and content are required")
 	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
-		return errResult("%v", err)
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
 	}
 
 	section := req.GetString("section", "")
 
-	if err := knowledge.Append(dir, filename, content, section); err != nil {
+	if err := service.KnowledgeAppend(dir, filename, content, section); err != nil {
 		return errResult("%v", err)
 	}
 
@@ -518,12 +467,12 @@ func (s *serverCtx) handleKnowledgeReplace(_ context.Context, req mcp.CallToolRe
 		return errResult("project, filename, section, and content are required")
 	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
-		return errResult("%v", err)
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
 	}
 
-	if err := knowledge.ReplaceSection(dir, filename, section, content); err != nil {
+	if err := service.KnowledgeReplace(dir, filename, section, content); err != nil {
 		return errResult("%v", err)
 	}
 
@@ -539,12 +488,12 @@ func (s *serverCtx) handleKnowledgeRename(_ context.Context, req mcp.CallToolReq
 		return errResult("project, old_filename, and new_filename are required")
 	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
-		return errResult("%v", err)
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
 	}
 
-	if err := knowledge.Rename(dir, oldName, newName); err != nil {
+	if err := service.KnowledgeRename(dir, oldName, newName); err != nil {
 		return errResult("%v", err)
 	}
 
@@ -561,42 +510,13 @@ func (s *serverCtx) handleTodoMove(_ context.Context, req mcp.CallToolRequest) (
 		return errResult("project, list, item_id, and target_list are required")
 	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	if err := service.MoveItem(dir, listName, itemID, targetList); err != nil {
 		return errResult("%v", err)
-	}
-
-	srcList, err := todo.LoadList(dir, listName)
-	if err != nil {
-		return errResult("loading source list: %v", err)
-	}
-
-	item, err := todo.ResolveItem(srcList, itemID)
-	if err != nil {
-		return errResult("%v", err)
-	}
-
-	itemCopy := todo.DeepCopyItem(item)
-
-	// Write to destination first — source still has the item if this fails
-	dstList, err := todo.LoadList(dir, targetList)
-	if err != nil {
-		dstList, err = todo.CreateList(dir, targetList, targetList)
-		if err != nil {
-			return errResult("creating target: %v", err)
-		}
-	}
-	dstList.Items = append(dstList.Items, itemCopy)
-	if err := todo.SaveList(dir, targetList, dstList); err != nil {
-		return errResult("saving target: %v", err)
-	}
-
-	// Only remove from source after destination is safely written
-	if err := todo.RemoveItem(srcList, itemID); err != nil {
-		return errResult("removing from source: %v", err)
-	}
-	if err := todo.SaveList(dir, listName, srcList); err != nil {
-		return errResult("saving source: %v", err)
 	}
 
 	return textResult(fmt.Sprintf("Moved %s #%s to %s", listName, itemID, targetList)), nil
@@ -610,12 +530,12 @@ func (s *serverCtx) handleKnowledgeDelete(_ context.Context, req mcp.CallToolReq
 		return errResult("project and filename are required")
 	}
 
-	dir, err := project.Resolve(s.projectRoot, proj)
-	if err != nil {
-		return errResult("%v", err)
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
 	}
 
-	if err := knowledge.Delete(dir, filename); err != nil {
+	if err := service.KnowledgeDelete(dir, filename); err != nil {
 		return errResult("%v", err)
 	}
 

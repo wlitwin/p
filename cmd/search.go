@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
+	"github.com/walter/p/internal/service"
 	"github.com/walter/p/internal/todo"
 	"github.com/walter/p/internal/tui"
 )
@@ -29,10 +30,10 @@ var searchCmd = &cobra.Command{
 			query = args[0]
 		}
 
-		query = strings.ToLower(query)
+		queryLower := strings.ToLower(query)
 
 		if projectName != "" {
-			return searchProject(projectName, query)
+			return searchProject(projectName, queryLower)
 		}
 
 		projects, err := project.List(cfg.ProjectRoot, false)
@@ -40,79 +41,44 @@ var searchCmd = &cobra.Command{
 			return err
 		}
 		for _, p := range projects {
-			_ = searchProject(p.Name, query)
+			_ = searchProject(p.Name, queryLower)
 		}
 		return nil
 	},
 }
 
-func searchProject(name, query string) error {
+func searchProject(name, queryLower string) error {
 	dir, err := project.Resolve(cfg.ProjectRoot, name)
 	if err != nil {
 		return err
 	}
 
-	headerPrinted := false
-	printHeader := func() {
-		if !headerPrinted {
-			fmt.Printf("%s\n", tui.Bold.Render(name))
-			headerPrinted = true
-		}
+	matches := service.SearchProject(dir, name, queryLower)
+	if len(matches) == 0 {
+		return nil
 	}
 
-	// Search todos
-	lists, _ := todo.ListNames(dir)
-	for _, listName := range lists {
-		list, err := todo.LoadList(dir, listName)
-		if err != nil {
-			continue
-		}
-		searchItems(list.Items, name, listName, "", 1, query, printHeader)
-	}
+	fmt.Printf("%s\n", tui.Bold.Render(name))
 
-	// Search knowledge
-	files, _ := knowledge.ListFiles(dir)
-	for _, f := range files {
-		content, err := knowledge.Read(dir, f)
-		if err != nil {
-			continue
-		}
-		if strings.Contains(strings.ToLower(content), query) {
-			printHeader()
-			path := filepath.Join("knowledge", f+".md")
-			fmt.Printf("  %s %s\n", tui.Cyan.Render(path), matchContext(content, query))
-		}
-	}
-
-	if headerPrinted {
-		fmt.Println()
-	}
-	return nil
-}
-
-func searchItems(items []*todo.Item, projectName, listName, prefix string, start int, query string, printHeader func()) {
-	for i, item := range items {
-		id := fmt.Sprintf("%s%d", prefix, start+i)
-		if strings.Contains(strings.ToLower(item.Text), query) {
-			printHeader()
-			marker := "[ ]"
-			switch item.State {
-			case todo.Done:
-				marker = "[x]"
-			case todo.Blocked:
-				marker = "[-]"
+	for _, m := range matches {
+		if m.Type == "todo" {
+			for _, r := range m.TodoResults {
+				marker := todo.StateMarker(r.Item.State)
+				fmt.Printf("  %s %s %s\n",
+					tui.Dim.Render(r.ListName+"#"+r.ItemID),
+					tui.StateStyle(marker),
+					r.Item.Text,
+				)
 			}
-			fmt.Printf("  %s %s %s %s\n",
-				tui.Dim.Render(listName+"#"+id),
-				tui.StateStyle(marker),
-				item.Text,
-				"",
-			)
-		}
-		if len(item.Children) > 0 {
-			searchItems(item.Children, projectName, listName, id+".", 1, query, printHeader)
+		} else {
+			path := filepath.Join("knowledge", m.File+".md")
+			content, _ := knowledge.Read(dir, m.File)
+			fmt.Printf("  %s %s\n", tui.Cyan.Render(path), matchContext(content, queryLower))
 		}
 	}
+
+	fmt.Println()
+	return nil
 }
 
 func matchContext(content, query string) string {

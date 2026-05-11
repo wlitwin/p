@@ -5,9 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/walter/p/internal/git"
-	"github.com/walter/p/internal/knowledge"
-	"github.com/walter/p/internal/project"
+	"github.com/walter/p/internal/service"
 )
 
 var editKnowledgeCmd = &cobra.Command{
@@ -21,34 +19,27 @@ var editKnowledgeCreateCmd = &cobra.Command{
 	Short: "Create a knowledge document",
 	Args:  cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-
-		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
-		if err != nil {
-			return err
-		}
-
-		tagsStr, _ := cmd.Flags().GetString("tags")
-		var tags []string
-		if tagsStr != "" {
-			tags = strings.Split(tagsStr, ",")
-			for i := range tags {
-				tags[i] = strings.TrimSpace(tags[i])
+		return withProjectLock(args[0], func(dir string) error {
+			tagsStr, _ := cmd.Flags().GetString("tags")
+			var tags []string
+			if tagsStr != "" {
+				tags = strings.Split(tagsStr, ",")
+				for i := range tags {
+					tags[i] = strings.TrimSpace(tags[i])
+				}
 			}
-		}
 
-		if err := knowledge.Create(dir, args[1], args[2], tags); err != nil {
-			return err
-		}
+			if err := service.KnowledgeCreate(dir, args[1], args[2], tags); err != nil {
+				return err
+			}
 
-		if err := git.CommitAll(dir, fmt.Sprintf("p: create knowledge doc %q", args[2])); err != nil {
-			return fmt.Errorf("committing: %w", err)
-		}
+			if err := service.Commit(dir, fmt.Sprintf("p: create knowledge doc %q", args[2])); err != nil {
+				return fmt.Errorf("committing: %w", err)
+			}
 
-		fmt.Printf("Created knowledge/%s.md\n", args[1])
-		return nil
+			fmt.Printf("Created knowledge/%s.md\n", args[1])
+			return nil
+		})
 	},
 }
 
@@ -57,27 +48,20 @@ var editKnowledgeAppendCmd = &cobra.Command{
 	Short: "Append content to a knowledge document",
 	Args:  cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
+		return withProjectLock(args[0], func(dir string) error {
+			section, _ := cmd.Flags().GetString("section")
 
-		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
-		if err != nil {
-			return err
-		}
+			if err := service.KnowledgeAppend(dir, args[1], args[2], section); err != nil {
+				return err
+			}
 
-		section, _ := cmd.Flags().GetString("section")
+			if err := service.Commit(dir, fmt.Sprintf("p: append to knowledge/%s", args[1])); err != nil {
+				return fmt.Errorf("committing: %w", err)
+			}
 
-		if err := knowledge.Append(dir, args[1], args[2], section); err != nil {
-			return err
-		}
-
-		if err := git.CommitAll(dir, fmt.Sprintf("p: append to knowledge/%s", args[1])); err != nil {
-			return fmt.Errorf("committing: %w", err)
-		}
-
-		fmt.Printf("Appended to knowledge/%s.md\n", args[1])
-		return nil
+			fmt.Printf("Appended to knowledge/%s.md\n", args[1])
+			return nil
+		})
 	},
 }
 
@@ -86,30 +70,23 @@ var editKnowledgeReplaceCmd = &cobra.Command{
 	Short: "Replace a section in a knowledge document",
 	Args:  cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
+		return withProjectLock(args[0], func(dir string) error {
+			section, _ := cmd.Flags().GetString("section")
+			if section == "" {
+				return fmt.Errorf("--section is required for replace")
+			}
 
-		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
-		if err != nil {
-			return err
-		}
+			if err := service.KnowledgeReplace(dir, args[1], section, args[2]); err != nil {
+				return err
+			}
 
-		section, _ := cmd.Flags().GetString("section")
-		if section == "" {
-			return fmt.Errorf("--section is required for replace")
-		}
+			if err := service.Commit(dir, fmt.Sprintf("p: replace section %q in knowledge/%s", section, args[1])); err != nil {
+				return fmt.Errorf("committing: %w", err)
+			}
 
-		if err := knowledge.ReplaceSection(dir, args[1], section, args[2]); err != nil {
-			return err
-		}
-
-		if err := git.CommitAll(dir, fmt.Sprintf("p: replace section %q in knowledge/%s", section, args[1])); err != nil {
-			return fmt.Errorf("committing: %w", err)
-		}
-
-		fmt.Printf("Replaced section %q in knowledge/%s.md\n", section, args[1])
-		return nil
+			fmt.Printf("Replaced section %q in knowledge/%s.md\n", section, args[1])
+			return nil
+		})
 	},
 }
 
@@ -118,25 +95,18 @@ var editKnowledgeRenameCmd = &cobra.Command{
 	Short: "Rename a knowledge document",
 	Args:  cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
+		return withProjectLock(args[0], func(dir string) error {
+			if err := service.KnowledgeRename(dir, args[1], args[2]); err != nil {
+				return err
+			}
 
-		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
-		if err != nil {
-			return err
-		}
+			if err := service.Commit(dir, fmt.Sprintf("p: rename knowledge/%s to knowledge/%s", args[1], args[2])); err != nil {
+				return fmt.Errorf("committing: %w", err)
+			}
 
-		if err := knowledge.Rename(dir, args[1], args[2]); err != nil {
-			return err
-		}
-
-		if err := git.CommitAll(dir, fmt.Sprintf("p: rename knowledge/%s to knowledge/%s", args[1], args[2])); err != nil {
-			return fmt.Errorf("committing: %w", err)
-		}
-
-		fmt.Printf("Renamed knowledge/%s.md to knowledge/%s.md\n", args[1], args[2])
-		return nil
+			fmt.Printf("Renamed knowledge/%s.md to knowledge/%s.md\n", args[1], args[2])
+			return nil
+		})
 	},
 }
 

@@ -1,0 +1,400 @@
+// Package service provides shared business logic used by both the CLI and MCP
+// server. It encapsulates the common load-modify-save patterns to avoid
+// duplication between the two entry points.
+//
+// Functions in this package perform the data operation (load, modify, save) but
+// do NOT commit to git. Callers are responsible for committing when appropriate
+// — the CLI commits after each operation, while the MCP server lets the caller
+// manage the git lifecycle.
+package service
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/walter/p/internal/git"
+	"github.com/walter/p/internal/knowledge"
+	"github.com/walter/p/internal/project"
+	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/validate"
+)
+
+// SetItemState loads a list, changes an item's state, and saves.
+func SetItemState(dir, listName, itemID string, state todo.State) error {
+	list, err := todo.LoadList(dir, listName)
+	if err != nil {
+		return err
+	}
+
+	item, err := todo.ResolveItem(list, itemID)
+	if err != nil {
+		return err
+	}
+
+	todo.SetState(item, state)
+
+	return todo.SaveList(dir, listName, list)
+}
+
+// SetItemPriority loads a list, changes an item's priority, and saves.
+func SetItemPriority(dir, listName, itemID string, priority todo.Priority) error {
+	list, err := todo.LoadList(dir, listName)
+	if err != nil {
+		return err
+	}
+
+	item, err := todo.ResolveItem(list, itemID)
+	if err != nil {
+		return err
+	}
+
+	item.Priority = priority
+
+	return todo.SaveList(dir, listName, list)
+}
+
+// SetItemDue loads a list, changes an item's due date, and saves.
+func SetItemDue(dir, listName, itemID, due string) error {
+	list, err := todo.LoadList(dir, listName)
+	if err != nil {
+		return err
+	}
+
+	item, err := todo.ResolveItem(list, itemID)
+	if err != nil {
+		return err
+	}
+
+	item.Due = due
+
+	return todo.SaveList(dir, listName, list)
+}
+
+// UpdateItemText loads a list, changes an item's text, and saves.
+func UpdateItemText(dir, listName, itemID, text string) error {
+	list, err := todo.LoadList(dir, listName)
+	if err != nil {
+		return err
+	}
+
+	item, err := todo.ResolveItem(list, itemID)
+	if err != nil {
+		return err
+	}
+
+	item.Text = text
+
+	return todo.SaveList(dir, listName, list)
+}
+
+// RemoveItem loads a list, removes an item, and saves.
+func RemoveItem(dir, listName, itemID string) error {
+	list, err := todo.LoadList(dir, listName)
+	if err != nil {
+		return err
+	}
+
+	if err := todo.RemoveItem(list, itemID); err != nil {
+		return err
+	}
+
+	return todo.SaveList(dir, listName, list)
+}
+
+// AddItem loads (or creates) a list, adds an item, and saves.
+// If parentID is non-empty, the item is nested under the specified parent.
+func AddItem(dir, listName, text string, priority todo.Priority, due, parentID string) error {
+	if err := validate.ListName(listName); err != nil {
+		return err
+	}
+
+	list, err := todo.LoadList(dir, listName)
+	if err != nil {
+		list, err = todo.CreateList(dir, listName, listName)
+		if err != nil {
+			return fmt.Errorf("creating list: %w", err)
+		}
+	}
+
+	item := todo.AddItem(list, text, priority, due)
+
+	if parentID != "" {
+		parent, err := todo.ResolveItem(list, parentID)
+		if err != nil {
+			return fmt.Errorf("resolving parent: %w", err)
+		}
+		list.Items = list.Items[:len(list.Items)-1]
+		parent.Children = append(parent.Children, item)
+	}
+
+	return todo.SaveList(dir, listName, list)
+}
+
+// MoveItem moves an item from one list to another and saves both lists.
+func MoveItem(dir, srcListName, itemID, dstListName string) error {
+	srcList, err := todo.LoadList(dir, srcListName)
+	if err != nil {
+		return fmt.Errorf("loading source list: %w", err)
+	}
+
+	item, err := todo.ResolveItem(srcList, itemID)
+	if err != nil {
+		return err
+	}
+
+	itemCopy := todo.DeepCopyItem(item)
+
+	// Write to destination first -- source still has the item if this fails
+	dstList, err := todo.LoadList(dir, dstListName)
+	if err != nil {
+		dstList, err = todo.CreateList(dir, dstListName, dstListName)
+		if err != nil {
+			return fmt.Errorf("creating target list: %w", err)
+		}
+	}
+	dstList.Items = append(dstList.Items, itemCopy)
+	if err := todo.SaveList(dir, dstListName, dstList); err != nil {
+		return fmt.Errorf("saving target: %w", err)
+	}
+
+	// Only remove from source after destination is safely written
+	if err := todo.RemoveItem(srcList, itemID); err != nil {
+		return fmt.Errorf("removing from source: %w", err)
+	}
+	if err := todo.SaveList(dir, srcListName, srcList); err != nil {
+		return fmt.Errorf("saving source: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveList deletes a todo list file.
+func RemoveList(dir, listName string) error {
+	path := todo.ListPath(dir, listName)
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("todo list %q not found", listName)
+	}
+
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("deleting: %w", err)
+	}
+
+	return nil
+}
+
+// ListStatus holds per-list item counts.
+type ListStatus struct {
+	Name    string
+	Open    int
+	Done    int
+	Blocked int
+}
+
+// GetProjectListStatuses returns per-list item counts for a project.
+func GetProjectListStatuses(dir string) ([]ListStatus, error) {
+	names, err := todo.ListNames(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var statuses []ListStatus
+	for _, name := range names {
+		list, err := todo.LoadList(dir, name)
+		if err != nil {
+			continue
+		}
+		open, done, blocked := todo.CountStates(list.Items)
+		statuses = append(statuses, ListStatus{
+			Name:    name,
+			Open:    open,
+			Done:    done,
+			Blocked: blocked,
+		})
+	}
+	return statuses, nil
+}
+
+// ProjectTotals returns aggregate item counts across all lists in a project.
+func ProjectTotals(dir string) (open, done, blocked int) {
+	statuses, err := GetProjectListStatuses(dir)
+	if err != nil {
+		return
+	}
+	for _, s := range statuses {
+		open += s.Open
+		done += s.Done
+		blocked += s.Blocked
+	}
+	return
+}
+
+// SearchMatch holds a search match across todos or knowledge docs.
+type SearchMatch struct {
+	// Type is "todo" or "knowledge"
+	Type string
+	// ListName is the todo list name (for todo matches)
+	ListName string
+	// File is the knowledge doc filename (for knowledge matches)
+	File string
+	// TodoResults holds matched todo items (for todo matches)
+	TodoResults []todo.SearchResult
+}
+
+// SearchProject searches all todos and knowledge docs in a project for a query.
+func SearchProject(dir, projectName, queryLower string) []SearchMatch {
+	var matches []SearchMatch
+
+	// Search todos
+	lists, _ := todo.ListNames(dir)
+	for _, listName := range lists {
+		list, err := todo.LoadList(dir, listName)
+		if err != nil {
+			continue
+		}
+		results := todo.SearchItems(list.Items, projectName, listName, "", 1, queryLower)
+		if len(results) > 0 {
+			matches = append(matches, SearchMatch{
+				Type:        "todo",
+				ListName:    listName,
+				TodoResults: results,
+			})
+		}
+	}
+
+	// Search knowledge
+	kFiles, _ := knowledge.Search(dir, queryLower)
+	for _, f := range kFiles {
+		matches = append(matches, SearchMatch{
+			Type: "knowledge",
+			File: f,
+		})
+	}
+
+	return matches
+}
+
+// KnowledgeCreate creates a knowledge doc.
+func KnowledgeCreate(dir, filename, title string, tags []string) error {
+	if err := validate.Filename(filename); err != nil {
+		return err
+	}
+	return knowledge.Create(dir, filename, title, tags)
+}
+
+// KnowledgeAppend appends content to a knowledge doc.
+func KnowledgeAppend(dir, filename, content, section string) error {
+	return knowledge.Append(dir, filename, content, section)
+}
+
+// KnowledgeReplace replaces a section in a knowledge doc.
+func KnowledgeReplace(dir, filename, section, content string) error {
+	return knowledge.ReplaceSection(dir, filename, section, content)
+}
+
+// KnowledgeRename renames a knowledge doc.
+func KnowledgeRename(dir, oldName, newName string) error {
+	return knowledge.Rename(dir, oldName, newName)
+}
+
+// KnowledgeDelete deletes a knowledge doc.
+func KnowledgeDelete(dir, filename string) error {
+	return knowledge.Delete(dir, filename)
+}
+
+// ProjectCreate creates a new project with directory structure and git init.
+func ProjectCreate(projectRoot, name, description string) error {
+	if err := validate.ProjectName(name); err != nil {
+		return err
+	}
+
+	if err := project.Create(projectRoot, name, description); err != nil {
+		return err
+	}
+
+	dir := fmt.Sprintf("%s/%s", projectRoot, name)
+	if err := git.Init(dir); err != nil {
+		return fmt.Errorf("git init: %w", err)
+	}
+
+	_ = git.CommitAll(dir, fmt.Sprintf("p: create project %q", name))
+	return nil
+}
+
+// ProjectArchive sets the archived state on a project and commits.
+func ProjectArchive(dir, projectName string, archived bool) error {
+	meta, err := project.LoadMeta(dir)
+	if err != nil {
+		return err
+	}
+
+	meta.Archived = archived
+	if err := project.SaveMeta(dir, meta); err != nil {
+		return err
+	}
+
+	action := "archived"
+	if !archived {
+		action = "unarchived"
+	}
+	_ = git.CommitAll(dir, fmt.Sprintf("p: %s project %q", action, projectName))
+	return nil
+}
+
+// SetItemTags loads a list, modifies tags on an item, and saves.
+func SetItemTags(dir, listName, itemID string, tags []string, remove bool) ([]string, error) {
+	list, err := todo.LoadList(dir, listName)
+	if err != nil {
+		return nil, err
+	}
+
+	item, err := todo.ResolveItem(list, itemID)
+	if err != nil {
+		return nil, err
+	}
+
+	if remove {
+		item.Tags = removeTags(item.Tags, tags)
+	} else {
+		item.Tags = addTags(item.Tags, tags)
+	}
+
+	if err := todo.SaveList(dir, listName, list); err != nil {
+		return nil, err
+	}
+
+	return item.Tags, nil
+}
+
+func addTags(existing, toAdd []string) []string {
+	set := make(map[string]bool)
+	for _, t := range existing {
+		set[t] = true
+	}
+	for _, t := range toAdd {
+		if !set[t] {
+			existing = append(existing, t)
+			set[t] = true
+		}
+	}
+	return existing
+}
+
+func removeTags(existing, toRemove []string) []string {
+	remove := make(map[string]bool)
+	for _, t := range toRemove {
+		remove[t] = true
+	}
+	var result []string
+	for _, t := range existing {
+		if !remove[t] {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
+// Commit is a convenience wrapper around git.CommitAll for callers (like the
+// CLI) that need to commit after a service operation.
+func Commit(dir, message string) error {
+	return git.CommitAll(dir, message)
+}

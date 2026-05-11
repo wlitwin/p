@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/project"
-	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/service"
 )
 
 var statusCmd = &cobra.Command{
@@ -41,22 +41,7 @@ func overallStatus() error {
 			continue
 		}
 
-		names, err := todo.ListNames(dir)
-		if err != nil {
-			continue
-		}
-
-		totalOpen, totalBlocked, totalDone := 0, 0, 0
-		for _, name := range names {
-			list, err := todo.LoadList(dir, name)
-			if err != nil {
-				continue
-			}
-			o, d, b := countStates(list.Items)
-			totalOpen += o
-			totalDone += d
-			totalBlocked += b
-		}
+		totalOpen, totalDone, totalBlocked := service.ProjectTotals(dir)
 
 		desc := ""
 		if p.Description != "" {
@@ -89,23 +74,17 @@ func projectStatus(name string) error {
 	}
 	fmt.Println()
 
-	names, err := todo.ListNames(dir)
+	statuses, err := service.GetProjectListStatuses(dir)
 	if err != nil {
 		return err
 	}
 
-	if len(names) == 0 {
+	if len(statuses) == 0 {
 		fmt.Println("No todo lists.")
 	} else {
 		fmt.Println("Todo lists:")
-		for _, n := range names {
-			list, err := todo.LoadList(dir, n)
-			if err != nil {
-				fmt.Printf("  %-20s (error loading)\n", n)
-				continue
-			}
-			open, done, blocked := countStates(list.Items)
-			fmt.Printf("  %-20s open=%-3d blocked=%-3d done=%-3d\n", n, open, blocked, done)
+		for _, s := range statuses {
+			fmt.Printf("  %-20s open=%-3d blocked=%-3d done=%-3d\n", s.Name, s.Open, s.Blocked, s.Done)
 		}
 	}
 

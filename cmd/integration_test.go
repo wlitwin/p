@@ -521,7 +521,7 @@ func TestIntegrationCountStates(t *testing.T) {
 		{Text: "Open 2", State: todo.Open},
 	}
 
-	open, done, blocked := countStates(items)
+	open, done, blocked := todo.CountStates(items)
 	if open != 3 {
 		t.Errorf("open: expected 3, got %d", open)
 	}

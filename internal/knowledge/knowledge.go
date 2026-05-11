@@ -159,6 +159,28 @@ func ExtractTags(content string) []string {
 	return nil
 }
 
+// Search performs case-insensitive full-text search across all knowledge docs,
+// returning filenames that contain the query.
+func Search(projectDir, query string) ([]string, error) {
+	files, err := ListFiles(projectDir)
+	if err != nil {
+		return nil, err
+	}
+
+	queryLower := strings.ToLower(query)
+	var matches []string
+	for _, f := range files {
+		content, err := Read(projectDir, f)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(strings.ToLower(content), queryLower) {
+			matches = append(matches, f)
+		}
+	}
+	return matches, nil
+}
+
 func Delete(projectDir, filename string) error {
 	path := FilePath(projectDir, filename)
 	if _, err := os.Stat(path); err != nil {
