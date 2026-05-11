@@ -10,6 +10,9 @@ import (
 
 var wikiLinkRe = regexp.MustCompile(`\[\[([^\]|]+)(?:\|([^\]]+))?\]\]`)
 
+// RenderWikiLinks converts [[wiki-link]] syntax in text to clickable OSC 8
+// terminal hyperlinks pointing to the corresponding knowledge doc files.
+// Falls back to plain text on terminals that don't support hyperlinks.
 func RenderWikiLinks(text, projectDir string) string {
 	if !isTermHyperlinkCapable() {
 		return text

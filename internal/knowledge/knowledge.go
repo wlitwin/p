@@ -1,3 +1,5 @@
+// Package knowledge provides CRUD and search operations for markdown knowledge
+// documents with YAML frontmatter, section-level editing, and glob-based filtering.
 package knowledge
 
 import (
@@ -8,10 +10,13 @@ import (
 	"time"
 )
 
+// Dir returns the absolute path to the knowledge docs directory within a project.
 func Dir(projectDir string) string {
 	return filepath.Join(projectDir, "knowledge")
 }
 
+// FilePath returns the absolute file path for a knowledge doc, appending
+// the .md extension if not already present. Supports subdirectory paths.
 func FilePath(projectDir, filename string) string {
 	if !strings.HasSuffix(filename, ".md") {
 		filename += ".md"
@@ -19,6 +24,9 @@ func FilePath(projectDir, filename string) string {
 	return filepath.Join(Dir(projectDir), filename)
 }
 
+// ListFiles returns the names of all knowledge docs in the project,
+// walking subdirectories recursively. Hidden directories (like .archive)
+// are skipped. Names are returned without the .md extension.
 func ListFiles(projectDir string) ([]string, error) {
 	dir := Dir(projectDir)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -53,6 +61,9 @@ func ListFiles(projectDir string) ([]string, error) {
 	return names, nil
 }
 
+// Create writes a new knowledge doc with YAML frontmatter (title, timestamps,
+// tags) and an H1 heading. Parent directories are created as needed.
+// Returns an error if the file already exists.
 func Create(projectDir, filename, title string, tags []string) error {
 	path := FilePath(projectDir, filename)
 	if _, err := os.Stat(path); err == nil {
@@ -81,6 +92,7 @@ func Create(projectDir, filename, title string, tags []string) error {
 	return os.WriteFile(path, []byte(sb.String()), 0o644)
 }
 
+// Read returns the full content of a knowledge doc as a string.
 func Read(projectDir, filename string) (string, error) {
 	data, err := os.ReadFile(FilePath(projectDir, filename))
 	if err != nil {
@@ -89,6 +101,9 @@ func Read(projectDir, filename string) (string, error) {
 	return string(data), nil
 }
 
+// Append adds content to a knowledge doc. If section is non-empty, the content
+// is inserted before the next sibling heading; otherwise it is appended to the
+// end of the file. The frontmatter updated timestamp is refreshed.
 func Append(projectDir, filename, content, section string) error {
 	path := FilePath(projectDir, filename)
 	data, err := os.ReadFile(path)
@@ -120,6 +135,9 @@ func Append(projectDir, filename, content, section string) error {
 	return os.WriteFile(path, []byte(text), 0o644)
 }
 
+// ReplaceSection replaces the body of a markdown section (identified by heading
+// text) with newContent, preserving the heading itself. Returns an error if the
+// section is not found.
 func ReplaceSection(projectDir, filename, section, newContent string) error {
 	path := FilePath(projectDir, filename)
 	data, err := os.ReadFile(path)
@@ -151,6 +169,8 @@ func ReplaceSection(projectDir, filename, section, newContent string) error {
 	return os.WriteFile(path, []byte(text), 0o644)
 }
 
+// ExtractTags parses the tags field from YAML frontmatter, returning them
+// as a string slice. Returns nil if no tags field is found.
 func ExtractTags(content string) []string {
 	lines := strings.Split(content, "\n")
 	inFrontmatter := false
@@ -343,6 +363,8 @@ func extractContextPatterns(content string) []string {
 	return nil
 }
 
+// Delete removes a knowledge doc from disk. Returns an error if the file
+// does not exist.
 func Delete(projectDir, filename string) error {
 	path := FilePath(projectDir, filename)
 	if _, err := os.Stat(path); err != nil {
@@ -351,6 +373,7 @@ func Delete(projectDir, filename string) error {
 	return os.Remove(path)
 }
 
+// Rename moves a knowledge doc from oldName to newName on disk.
 func Rename(projectDir, oldName, newName string) error {
 	oldPath := FilePath(projectDir, oldName)
 	newPath := FilePath(projectDir, newName)

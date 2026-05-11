@@ -1,3 +1,5 @@
+// Package mcpserver implements an MCP (Model Context Protocol) stdio server
+// that exposes project management tools for AI agents.
 package mcpserver
 
 import (
@@ -15,6 +17,8 @@ import (
 	"github.com/walter/p/internal/validate"
 )
 
+// NewServer creates and configures an MCP server with all p tool handlers
+// registered. The projectRoot is used to resolve project directories.
 func NewServer(projectRoot string) *server.MCPServer {
 	s := server.NewMCPServer(
 		"p",

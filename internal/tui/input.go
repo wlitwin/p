@@ -49,6 +49,8 @@ func (m inputModel) View() string {
 	return dimStyle.Render(m.prompt) + " " + m.value + cursor + "\n"
 }
 
+// Input displays a single-line text input prompt and returns the entered value.
+// Returns an error if the user cancels with Escape.
 func Input(prompt string) (string, error) {
 	m := inputModel{prompt: prompt}
 	p := tea.NewProgram(m)
@@ -64,6 +66,8 @@ func Input(prompt string) (string, error) {
 	return result.value, nil
 }
 
+// Confirm displays a yes/no confirmation prompt. Returns true for Y/y/empty
+// input (default yes) and false for any other input.
 func Confirm(prompt string) (bool, error) {
 	m := inputModel{prompt: prompt + " [Y/n]"}
 	p := tea.NewProgram(m)

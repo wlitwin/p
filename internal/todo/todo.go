@@ -1,3 +1,5 @@
+// Package todo provides parsing, rendering, and CRUD operations for markdown-based
+// todo lists with YAML frontmatter, checkbox items, inline metadata, and nested sub-items.
 package todo
 
 import (
@@ -13,6 +15,7 @@ func StateMarker(s State) string {
 	return stateMarker(s)
 }
 
+// State represents the completion state of a todo item.
 type State string
 
 const (
@@ -21,6 +24,7 @@ const (
 	Done    State = "done"
 )
 
+// Priority indicates the urgency of a todo item.
 type Priority string
 
 const (
@@ -28,6 +32,7 @@ const (
 	Backlog Priority = "backlog"
 )
 
+// Item represents a single todo item with optional metadata and nested children.
 type Item struct {
 	Text     string
 	State    State
@@ -40,6 +45,7 @@ type Item struct {
 	Children []*Item
 }
 
+// List represents a todo list with YAML frontmatter metadata and a tree of items.
 type List struct {
 	Title   string
 	Created time.Time
@@ -59,6 +65,7 @@ func stateMarker(s State) string {
 	}
 }
 
+// ParseState converts a markdown checkbox marker (e.g. "[x]", "[-]", "[ ]") to a State.
 func ParseState(marker string) State {
 	switch marker {
 	case "[x]":
@@ -70,10 +77,13 @@ func ParseState(marker string) State {
 	}
 }
 
+// ListDir returns the absolute path to the todos directory within a project.
 func ListDir(projectDir string) string {
 	return filepath.Join(projectDir, "todos")
 }
 
+// ListNames returns the names of all non-archived todo lists in the project,
+// derived from .md filenames in the todos directory.
 func ListNames(projectDir string) ([]string, error) {
 	dir := ListDir(projectDir)
 	entries, err := os.ReadDir(dir)
@@ -94,6 +104,8 @@ func ListNames(projectDir string) ([]string, error) {
 	return names, nil
 }
 
+// ArchivedListNames returns the names of all archived todo lists in the
+// project's .archive directory.
 func ArchivedListNames(projectDir string) ([]string, error) {
 	dir := filepath.Join(ListDir(projectDir), ".archive")
 	entries, err := os.ReadDir(dir)
@@ -114,10 +126,12 @@ func ArchivedListNames(projectDir string) ([]string, error) {
 	return names, nil
 }
 
+// ListPath returns the absolute file path for a named todo list.
 func ListPath(projectDir, listName string) string {
 	return filepath.Join(ListDir(projectDir), listName+".md")
 }
 
+// LoadList reads and parses a todo list from disk by name.
 func LoadList(projectDir, listName string) (*List, error) {
 	data, err := os.ReadFile(ListPath(projectDir, listName))
 	if err != nil {
@@ -126,12 +140,16 @@ func LoadList(projectDir, listName string) (*List, error) {
 	return Parse(string(data))
 }
 
+// SaveList renders a todo list to markdown and writes it to disk,
+// updating the list's Updated timestamp.
 func SaveList(projectDir, listName string, list *List) error {
 	list.Updated = time.Now().UTC()
 	data := Render(list)
 	return os.WriteFile(ListPath(projectDir, listName), []byte(data), 0o644)
 }
 
+// CreateList creates a new todo list with the given title and writes it to disk.
+// Returns an error if a list with that name already exists.
 func CreateList(projectDir, listName, title string) (*List, error) {
 	path := ListPath(projectDir, listName)
 	if _, err := os.Stat(path); err == nil {
@@ -149,6 +167,7 @@ func CreateList(projectDir, listName, title string) (*List, error) {
 	return list, nil
 }
 
+// AddItem appends a new open item to the list and returns it.
 func AddItem(list *List, text string, priority Priority, due string) *Item {
 	item := &Item{
 		Text:     text,
@@ -161,6 +180,8 @@ func AddItem(list *List, text string, priority Priority, due string) *Item {
 	return item
 }
 
+// ResolveItem finds an item by its positional ID (e.g. "2", "3.1").
+// IDs are 1-based and dot-separated for nested children.
 func ResolveItem(list *List, id string) (*Item, error) {
 	parts := strings.Split(id, ".")
 	items := list.Items
@@ -179,6 +200,8 @@ func ResolveItem(list *List, id string) (*Item, error) {
 	return nil, fmt.Errorf("invalid item id %q", id)
 }
 
+// RemoveItem deletes an item from the list by its positional ID,
+// including nested children if the target is a parent.
 func RemoveItem(list *List, id string) error {
 	parts := strings.Split(id, ".")
 	if len(parts) == 1 {
@@ -204,6 +227,7 @@ func RemoveItem(list *List, id string) error {
 	return nil
 }
 
+// DeepCopyItem returns a deep copy of an item including its tags and children.
 func DeepCopyItem(item *Item) *Item {
 	cp := *item
 	if len(item.Tags) > 0 {
@@ -267,6 +291,8 @@ func SearchItems(items []*Item, projectName, listName, prefix string, start int,
 	return results
 }
 
+// SetState changes an item's state. For recurring tasks marked done, the item
+// is reopened with its due date advanced to the next occurrence.
 func SetState(item *Item, state State) {
 	if state == Done && item.Recur != "" {
 		// Recurring task: mark done but immediately reopen

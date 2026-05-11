@@ -1,3 +1,5 @@
+// Package tui provides terminal UI components including an interactive picker,
+// text input, confirmation prompts, styled output, and wiki-link rendering.
 package tui
 
 import "github.com/charmbracelet/lipgloss"
@@ -11,6 +13,7 @@ var (
 	Cyan   = lipgloss.NewStyle().Foreground(lipgloss.Color("51"))
 )
 
+// StateStyle returns a colorized rendering of a checkbox marker.
 func StateStyle(marker string) string {
 	switch marker {
 	case "[x]":
@@ -22,6 +25,7 @@ func StateStyle(marker string) string {
 	}
 }
 
+// PriorityStyle returns a colorized rendering of a priority value.
 func PriorityStyle(p string) string {
 	switch p {
 	case "backlog":

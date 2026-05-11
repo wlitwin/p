@@ -10,6 +10,9 @@ import (
 var itemRe = regexp.MustCompile(`^(\s*)- \[([ x\-])\] (.+)$`)
 var metaRe = regexp.MustCompile(`\b(priority|due|created|done|blocked-by|tags|recur)=(\S+)`)
 
+// Parse parses a markdown todo list (with YAML frontmatter) into a List.
+// The content should follow the format: YAML frontmatter delimited by "---"
+// followed by checkbox items (- [ ], - [x], - [-]) with optional inline metadata.
 func Parse(content string) (*List, error) {
 	lines := strings.Split(content, "\n")
 	list := &List{}
@@ -178,6 +181,8 @@ func parseItems(lines []string, baseIndent int) []*Item {
 	return items
 }
 
+// Render serializes a List back to its markdown representation, including
+// YAML frontmatter and all items with their inline metadata.
 func Render(list *List) string {
 	var sb strings.Builder
 

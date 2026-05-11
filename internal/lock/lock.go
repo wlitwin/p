@@ -1,3 +1,5 @@
+// Package lock provides file-based mutual exclusion for project directories,
+// with automatic stale lock detection via PID checking.
 package lock
 
 import (
@@ -10,10 +12,13 @@ import (
 	"time"
 )
 
+// Lock represents an acquired file-based project lock. Call Release when done.
 type Lock struct {
 	path string
 }
 
+// Info contains metadata about an existing lock: the owning PID and when
+// the lock was acquired.
 type Info struct {
 	PID       int
 	Timestamp time.Time
@@ -23,6 +28,10 @@ func lockPath(projectDir string) string {
 	return filepath.Join(projectDir, ".p", "lock")
 }
 
+// Acquire attempts to create a project lock file atomically. If a lock file
+// already exists, it checks whether the owning process is still running and
+// breaks stale locks automatically. Returns an error if the lock is held by
+// a live process.
 func Acquire(projectDir string) (*Lock, error) {
 	path := lockPath(projectDir)
 
@@ -66,6 +75,7 @@ func (l *Lock) Release() {
 	}
 }
 
+// Read parses an existing lock file and returns its metadata.
 func Read(projectDir string) (*Info, error) {
 	data, err := os.ReadFile(lockPath(projectDir))
 	if err != nil {

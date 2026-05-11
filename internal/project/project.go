@@ -1,3 +1,5 @@
+// Package project provides CRUD operations for projects, including creation,
+// metadata loading/saving, listing, resolution, and archival.
 package project
 
 import (
@@ -9,6 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ProjectMeta holds the YAML-serialized metadata for a project, stored in
+// .p/config.yaml within the project directory.
 type ProjectMeta struct {
 	Name           string    `yaml:"name"`
 	Created        time.Time `yaml:"created"`
@@ -18,6 +22,9 @@ type ProjectMeta struct {
 	DefaultContext []string  `yaml:"default_context,omitempty"`
 }
 
+// Create initializes a new project directory under root with the standard
+// subdirectories (knowledge, todos, assets, .p) and writes initial metadata.
+// Returns an error if the project already exists.
 func Create(root, name, description string) error {
 	dir := filepath.Join(root, name)
 	if _, err := os.Stat(dir); err == nil {
@@ -43,6 +50,7 @@ func Create(root, name, description string) error {
 	return os.WriteFile(filepath.Join(dir, ".p", "config.yaml"), data, 0o644)
 }
 
+// LoadMeta reads and deserializes project metadata from .p/config.yaml.
 func LoadMeta(projectDir string) (ProjectMeta, error) {
 	var meta ProjectMeta
 	data, err := os.ReadFile(filepath.Join(projectDir, ".p", "config.yaml"))
@@ -52,6 +60,7 @@ func LoadMeta(projectDir string) (ProjectMeta, error) {
 	return meta, yaml.Unmarshal(data, &meta)
 }
 
+// SaveMeta serializes project metadata and writes it to .p/config.yaml.
 func SaveMeta(projectDir string, meta ProjectMeta) error {
 	data, err := yaml.Marshal(meta)
 	if err != nil {
@@ -60,6 +69,8 @@ func SaveMeta(projectDir string, meta ProjectMeta) error {
 	return os.WriteFile(filepath.Join(projectDir, ".p", "config.yaml"), data, 0o644)
 }
 
+// List returns metadata for all projects under root. Archived projects are
+// included only when includeArchived is true.
 func List(root string, includeArchived bool) ([]ProjectMeta, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -87,6 +98,8 @@ func List(root string, includeArchived bool) ([]ProjectMeta, error) {
 	return projects, nil
 }
 
+// Resolve returns the absolute path to a named project directory, verifying
+// that it exists and contains a .p/config.yaml file.
 func Resolve(root, name string) (string, error) {
 	dir := filepath.Join(root, name)
 	configPath := filepath.Join(dir, ".p", "config.yaml")

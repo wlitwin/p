@@ -1,3 +1,5 @@
+// Package ai orchestrates AI operations by launching the claude CLI subprocess
+// with project-aware system prompts, MCP tool configuration, and streaming output.
 package ai
 
 import (
@@ -17,6 +19,8 @@ import (
 	"github.com/walter/p/internal/todo"
 )
 
+// Task describes an AI operation to perform, including the target project,
+// operating mode, input text, and optional context scoping.
 type Task struct {
 	ProjectName     string
 	ProjectDir      string
@@ -29,6 +33,7 @@ type Task struct {
 	ContextPatterns []string // knowledge doc glob patterns; nil means include all
 }
 
+// Mode determines the AI agent's behavior and the system prompt instructions.
 type Mode string
 
 const (
@@ -65,15 +70,20 @@ func LoadCustomPrompt(projectDir string, mode string) string {
 	return strings.Join(parts, "\n\n")
 }
 
+// MCPServerConfig is the JSON structure passed to the claude CLI's --mcp-config
+// flag, mapping server names to their command definitions.
 type MCPServerConfig struct {
 	MCPServers map[string]MCPServerDef `json:"mcpServers"`
 }
 
+// MCPServerDef defines how to launch an MCP server subprocess.
 type MCPServerDef struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
 }
 
+// MCPConfig returns the MCP server configuration that registers the p binary
+// as an MCP tool server for the claude CLI subprocess.
 func MCPConfig(pBinary string) MCPServerConfig {
 	return MCPServerConfig{
 		MCPServers: map[string]MCPServerDef{
@@ -104,6 +114,7 @@ type assistantMessage struct {
 	Content []contentBlock `json:"content"`
 }
 
+// RunOptions provides optional configuration for an AI run.
 type RunOptions struct {
 	Continue bool     // resume last conversation
 	Stderr   *os.File // stderr for claude subprocess (nil to suppress)
@@ -225,6 +236,8 @@ func processStreamLine(line string) {
 
 var mdRenderer *glamour.TermRenderer
 
+// RenderMarkdown renders markdown text to styled terminal output using glamour.
+// The renderer is initialized lazily and reused across calls.
 func RenderMarkdown(text string) (string, error) {
 	if mdRenderer == nil {
 		var err error

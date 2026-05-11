@@ -1,3 +1,5 @@
+// Package config handles loading and saving the global application configuration
+// from the XDG config directory.
 package config
 
 import (
@@ -8,6 +10,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Config holds the global application configuration, persisted as YAML in
+// the XDG config directory (~/.config/p/config.yaml).
 type Config struct {
 	ProjectRoot     string `yaml:"project_root"`
 	ClaudePath      string `yaml:"claude_path"`
@@ -15,6 +19,7 @@ type Config struct {
 	DefaultPriority string `yaml:"default_priority"`
 }
 
+// DefaultConfig returns a Config with sensible defaults for all fields.
 func DefaultConfig() Config {
 	return Config{
 		ClaudePath:      "claude",
@@ -34,6 +39,8 @@ func configDir() (string, error) {
 	return filepath.Join(home, ".config", "p"), nil
 }
 
+// ConfigPath returns the absolute path to the config file, respecting
+// XDG_CONFIG_HOME if set.
 func ConfigPath() (string, error) {
 	dir, err := configDir()
 	if err != nil {
@@ -42,6 +49,8 @@ func ConfigPath() (string, error) {
 	return filepath.Join(dir, "config.yaml"), nil
 }
 
+// Load reads the config file from disk and returns it merged over defaults.
+// Returns defaults without error if the config file does not exist.
 func Load() (Config, error) {
 	cfg := DefaultConfig()
 	path, err := ConfigPath()
@@ -63,6 +72,7 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
+// Save writes the config to disk, creating the config directory if needed.
 func Save(cfg Config) error {
 	path, err := ConfigPath()
 	if err != nil {

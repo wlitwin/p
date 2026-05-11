@@ -13,6 +13,7 @@ var (
 	dimStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 )
 
+// PickerItem represents a selectable option in the interactive picker TUI.
 type PickerItem struct {
 	Label string
 	Desc  string
@@ -81,6 +82,8 @@ func (m pickerModel) View() string {
 	return s
 }
 
+// Pick displays an interactive list picker and returns the selected index.
+// Returns an error if the user cancels.
 func Pick(title string, items []PickerItem) (int, error) {
 	if len(items) == 0 {
 		return -1, fmt.Errorf("no items to pick from")
