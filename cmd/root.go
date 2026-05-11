@@ -13,7 +13,11 @@ import (
 var cfg config.Config
 var verbose bool
 
-var Version = "dev"
+var (
+	Version   = "dev"
+	GitCommit = "unknown"
+	BuildDate = "unknown"
+)
 
 var rootCmd = &cobra.Command{
 	Use:     "p",
