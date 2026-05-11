@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/glamour"
@@ -19,6 +20,7 @@ type Task struct {
 	ProjectDir    string
 	Input         string
 	Mode          Mode
+	CommandName   string   // CLI command name (e.g., "ask", "do", "review") for prompt file lookup
 	ListName      string   // hint for todo mode, may be empty
 	AlsoProjects  []string // additional project dirs for multi-project context
 	AlsoNames     []string // names corresponding to AlsoProjects
@@ -32,6 +34,33 @@ const (
 	ModePlan      Mode = "plan"
 	ModeAsk       Mode = "ask"
 )
+
+// LoadCustomPrompt reads custom prompt files from a project's .p/ directory.
+// It returns the combined content of .p/prompt.md (base) and .p/prompt-{mode}.md
+// (mode-specific), separated by newlines. Either or both may be absent.
+func LoadCustomPrompt(projectDir string, mode string) string {
+	var parts []string
+
+	// Base prompt — always loaded if present
+	basePath := filepath.Join(projectDir, ".p", "prompt.md")
+	if data, err := os.ReadFile(basePath); err == nil {
+		if content := strings.TrimSpace(string(data)); content != "" {
+			parts = append(parts, content)
+		}
+	}
+
+	// Mode-specific prompt — appended if present
+	if mode != "" {
+		modePath := filepath.Join(projectDir, ".p", fmt.Sprintf("prompt-%s.md", mode))
+		if data, err := os.ReadFile(modePath); err == nil {
+			if content := strings.TrimSpace(string(data)); content != "" {
+				parts = append(parts, content)
+			}
+		}
+	}
+
+	return strings.Join(parts, "\n\n")
+}
 
 type MCPServerConfig struct {
 	MCPServers map[string]MCPServerDef `json:"mcpServers"`
@@ -161,8 +190,7 @@ func processStreamLine(line string) {
 		for _, block := range msg.Content {
 			switch block.Type {
 			case "tool_use":
-				if strings.HasPrefix(block.Name, "mcp__p__") {
-					toolName := strings.TrimPrefix(block.Name, "mcp__p__")
+				if toolName, ok := strings.CutPrefix(block.Name, "mcp__p__"); ok {
 					fmt.Fprintf(os.Stderr, "  → %s\n", toolName)
 				}
 			case "text":
@@ -226,6 +254,18 @@ func buildPrompt(task Task) string {
 		alsoTask := Task{ProjectName: name, ProjectDir: alsoDir}
 		fmt.Fprintf(&sb, "## Related project: %s\n\n", name)
 		sb.WriteString(projectContext(alsoTask))
+	}
+
+	// Inject custom system prompt from .p/prompt.md and .p/prompt-{mode}.md
+	cmdName := task.CommandName
+	if cmdName == "" {
+		cmdName = string(task.Mode)
+	}
+	customPrompt := LoadCustomPrompt(task.ProjectDir, cmdName)
+	if customPrompt != "" {
+		sb.WriteString("## Custom instructions\n\n")
+		sb.WriteString(customPrompt)
+		sb.WriteString("\n\n")
 	}
 
 	sb.WriteString("## Task\n\n")

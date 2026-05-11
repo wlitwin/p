@@ -54,6 +54,7 @@ Examples:
 			ProjectDir:  dir,
 			Input:       input,
 			Mode:        ai.ModePlan,
+			CommandName: "plan",
 		}
 
 		also, _ := cmd.Flags().GetStringSlice("also")

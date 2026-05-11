@@ -82,6 +82,7 @@ Use --ai to have the AI agent decide placement and wording.`,
 				ProjectDir:  dir,
 				Input:       text,
 				Mode:        mode,
+				CommandName: "add",
 				ListName:    listName,
 			}
 

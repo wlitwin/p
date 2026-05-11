@@ -356,3 +356,165 @@ func TestProcessStreamLineResult(t *testing.T) {
 		t.Errorf("expected stderr to contain 'max turns', got %q", output)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// LoadCustomPrompt tests
+// ---------------------------------------------------------------------------
+
+func TestLoadCustomPromptNoFiles(t *testing.T) {
+	dir := setupProjectDir(t)
+	result := LoadCustomPrompt(dir, "ask")
+	if result != "" {
+		t.Errorf("expected empty string when no prompt files exist, got %q", result)
+	}
+}
+
+func TestLoadCustomPromptBaseOnly(t *testing.T) {
+	dir := setupProjectDir(t)
+	promptPath := filepath.Join(dir, ".p", "prompt.md")
+	if err := os.WriteFile(promptPath, []byte("This is a Rust project. Use idiomatic Rust patterns."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := LoadCustomPrompt(dir, "ask")
+	if result != "This is a Rust project. Use idiomatic Rust patterns." {
+		t.Errorf("unexpected result: %q", result)
+	}
+}
+
+func TestLoadCustomPromptModeOnly(t *testing.T) {
+	dir := setupProjectDir(t)
+	modePath := filepath.Join(dir, ".p", "prompt-do.md")
+	if err := os.WriteFile(modePath, []byte("Always run tests after changes."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := LoadCustomPrompt(dir, "do")
+	if result != "Always run tests after changes." {
+		t.Errorf("unexpected result: %q", result)
+	}
+
+	// Different mode should not pick up prompt-do.md
+	result = LoadCustomPrompt(dir, "ask")
+	if result != "" {
+		t.Errorf("expected empty for mode 'ask', got %q", result)
+	}
+}
+
+func TestLoadCustomPromptBaseAndMode(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	basePath := filepath.Join(dir, ".p", "prompt.md")
+	if err := os.WriteFile(basePath, []byte("This is a Go project."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	modePath := filepath.Join(dir, ".p", "prompt-do.md")
+	if err := os.WriteFile(modePath, []byte("Run go test ./... after changes."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := LoadCustomPrompt(dir, "do")
+	if !strings.Contains(result, "This is a Go project.") {
+		t.Error("result should contain base prompt")
+	}
+	if !strings.Contains(result, "Run go test ./... after changes.") {
+		t.Error("result should contain mode-specific prompt")
+	}
+
+	// Verify ordering: base comes first
+	baseIdx := strings.Index(result, "This is a Go project.")
+	modeIdx := strings.Index(result, "Run go test ./... after changes.")
+	if baseIdx >= modeIdx {
+		t.Error("base prompt should come before mode-specific prompt")
+	}
+}
+
+func TestLoadCustomPromptEmptyMode(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	basePath := filepath.Join(dir, ".p", "prompt.md")
+	if err := os.WriteFile(basePath, []byte("Base instructions here."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty mode string should still load base prompt
+	result := LoadCustomPrompt(dir, "")
+	if result != "Base instructions here." {
+		t.Errorf("unexpected result with empty mode: %q", result)
+	}
+}
+
+func TestLoadCustomPromptWhitespaceOnly(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	basePath := filepath.Join(dir, ".p", "prompt.md")
+	if err := os.WriteFile(basePath, []byte("  \n  \n  "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := LoadCustomPrompt(dir, "ask")
+	if result != "" {
+		t.Errorf("whitespace-only file should be treated as empty, got %q", result)
+	}
+}
+
+func TestBuildPromptWithCustomPrompt(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	basePath := filepath.Join(dir, ".p", "prompt.md")
+	if err := os.WriteFile(basePath, []byte("This project uses PostgreSQL and follows conventional commits."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	task := baseTask(dir)
+	task.Mode = ModePlan
+	task.CommandName = "plan"
+
+	prompt := buildPrompt(task)
+
+	if !strings.Contains(prompt, "Custom instructions") {
+		t.Error("prompt should contain 'Custom instructions' section header")
+	}
+	if !strings.Contains(prompt, "PostgreSQL") {
+		t.Error("prompt should contain custom prompt content")
+	}
+}
+
+func TestBuildPromptWithModeSpecificPrompt(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	basePath := filepath.Join(dir, ".p", "prompt.md")
+	if err := os.WriteFile(basePath, []byte("We use Go with standard library patterns."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	modePath := filepath.Join(dir, ".p", "prompt-review.md")
+	if err := os.WriteFile(modePath, []byte("Focus on test coverage gaps."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	task := baseTask(dir)
+	task.Mode = ModePlan
+	task.CommandName = "review"
+
+	prompt := buildPrompt(task)
+
+	if !strings.Contains(prompt, "We use Go with standard library patterns.") {
+		t.Error("prompt should contain base custom instructions")
+	}
+	if !strings.Contains(prompt, "Focus on test coverage gaps.") {
+		t.Error("prompt should contain review-specific instructions")
+	}
+}
+
+func TestBuildPromptNoCustomPrompt(t *testing.T) {
+	dir := setupProjectDir(t)
+	task := baseTask(dir)
+	task.Mode = ModeAsk
+
+	prompt := buildPrompt(task)
+
+	if strings.Contains(prompt, "Custom instructions") {
+		t.Error("prompt should NOT contain 'Custom instructions' when no prompt files exist")
+	}
+}

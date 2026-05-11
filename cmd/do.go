@@ -194,6 +194,14 @@ func buildDoPrompt(projectName, projectDir string, list *todo.List, listName str
 		fmt.Fprintf(&sb, "### %s\n\n%s\n\n", f, content)
 	}
 
+	// Inject custom system prompt from .p/prompt.md and .p/prompt-do.md
+	customPrompt := ai.LoadCustomPrompt(projectDir, "do")
+	if customPrompt != "" {
+		sb.WriteString("## Custom instructions\n\n")
+		sb.WriteString(customPrompt)
+		sb.WriteString("\n\n")
+	}
+
 	sb.WriteString("## Instructions\n\n")
 	sb.WriteString("- Implement the tasks in this code repository.\n")
 	sb.WriteString("- You have full access to read, edit, and run code.\n")

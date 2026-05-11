@@ -53,6 +53,7 @@ Examples:
 			ProjectDir:  dir,
 			Input:       question,
 			Mode:        ai.ModeAsk,
+			CommandName: "ask",
 		}
 
 		cont, _ := cmd.Flags().GetBool("continue")

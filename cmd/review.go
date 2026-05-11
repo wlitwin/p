@@ -51,6 +51,7 @@ Examples:
 		task := ai.Task{
 			ProjectName: projectName,
 			ProjectDir:  dir,
+			CommandName: "review",
 			Input: `Review the recent git history and current project state. Then:
 1. Summarize what changed recently
 2. Identify what's currently in progress (open items)
