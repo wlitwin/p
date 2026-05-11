@@ -78,7 +78,7 @@ func buildHelpPrompt() string {
 		{"p done <project> <list> <id> [id...]", "Mark items done (supports multiple IDs)"},
 		{"p search [project] <query>", "Full-text search across todos and knowledge"},
 		{"p do <project> [list] [ids...] [-m 'message']", "Have AI implement todo items in the code repo"},
-		{"p plan <project> '<description>' [--also=other-project] [-y]", "Open-ended AI planning — creates multiple todos/knowledge"},
+		{"p plan <project> '<description>' [--also=other-project]", "Open-ended AI planning — creates multiple todos/knowledge"},
 		{"p ask <project> '<question>' [-c]", "Ask the AI about project state (read-only). -c continues last conversation"},
 		{"p save <project> [message...]", "Commit manual edits (Obsidian, text editor)"},
 		{"p how <question>", "This command — ask how to do something"},
@@ -105,7 +105,7 @@ func buildHelpPrompt() string {
 		{"p todo archive-list <project> [list] [--restore]", "Archive a finished list (or auto-archive all 100% done)"},
 
 		// p ai — specialized AI commands
-		{"p ai review <project> [-y]", "AI reviews project and can update todos/knowledge"},
+		{"p ai review <project>", "AI reviews project and can update todos/knowledge"},
 		{"p ai summarize <project>", "AI-generated status report (read-only)"},
 
 		// p knowledge — docs

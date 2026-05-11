@@ -49,7 +49,7 @@ p how <question>                    # ask how to do something with p
 
 ```bash
 p do <project> [list] [ids...] [-m 'msg'] # AI implements todos in code repo
-p plan <project> '<desc>' [--also=P] [-y]  # AI planning — creates todos/knowledge
+p plan <project> '<desc>' [--also=P]       # AI planning — creates todos/knowledge
 p ask <project> '<question>' [-c]          # read-only AI queries
 ```
 
@@ -82,7 +82,7 @@ p todo archive-list <project> [list] [--restore]  # archive finished lists
 ### p ai — Specialized AI Commands
 
 ```bash
-p ai review <project> [-y]          # AI reviews and can update project
+p ai review <project>               # AI reviews and can update project
 p ai summarize <project>            # AI-generated status report (read-only)
 ```
 

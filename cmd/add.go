@@ -35,7 +35,6 @@ Use --ai to have the AI agent decide placement and wording.`,
 
 		isKnowledge, _ := cmd.Flags().GetBool("knowledge")
 		useAI, _ := cmd.Flags().GetBool("ai")
-		autoYes, _ := cmd.Flags().GetBool("yes")
 
 		// Detect URLs — default to knowledge mode with AI
 		var text string
@@ -90,7 +89,6 @@ Use --ai to have the AI agent decide placement and wording.`,
 				return err
 			}
 
-			// Show diff and confirm
 			diff, err := git.Diff(dir)
 			if err != nil {
 				return fmt.Errorf("getting diff: %w", err)
@@ -102,17 +100,6 @@ Use --ai to have the AI agent decide placement and wording.`,
 			}
 
 			fmt.Fprintf(os.Stderr, "\n--- Changes ---\n%s\n", diff)
-
-			if !autoYes {
-				ok, err := tui.Confirm("Commit these changes?")
-				if err != nil || !ok {
-					if revertErr := git.RevertChanges(dir); revertErr != nil {
-						return fmt.Errorf("reverting changes: %w", revertErr)
-					}
-					fmt.Println("Changes reverted.")
-					return nil
-				}
-			}
 
 			commitMsg := fmt.Sprintf("p: AI added %s content from: %s", mode, truncate(text, 60))
 			if err := git.CommitAll(dir, commitMsg); err != nil {
@@ -215,7 +202,6 @@ func pickList(projectDir string) (string, error) {
 func init() {
 	addCmd.Flags().BoolP("knowledge", "k", false, "Add to knowledge base instead of todos")
 	addCmd.Flags().Bool("ai", false, "Use AI agent for smart placement and wording")
-	addCmd.Flags().BoolP("yes", "y", false, "Auto-confirm AI changes without prompting")
 	addCmd.Flags().StringP("list", "l", "", "Target todo list (skips interactive picker)")
 	addCmd.Flags().String("priority", "", "Priority: now or backlog (default: now)")
 	addCmd.Flags().String("due", "", "Due date: YYYY-MM-DD")

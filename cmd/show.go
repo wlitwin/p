@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/walter/p/internal/ai"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
-	"github.com/walter/p/internal/tui"
 )
 
 var showCmd = &cobra.Command{
@@ -31,8 +31,7 @@ var showCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("reading knowledge doc: %w", err)
 			}
-			fmt.Print(tui.RenderWikiLinks(content, dir))
-			return nil
+			return renderShow(content)
 		}
 
 		list, err := todo.LoadList(dir, args[1])
@@ -42,14 +41,23 @@ var showCmd = &cobra.Command{
 			if kerr != nil {
 				return fmt.Errorf("not found as todo list or knowledge doc: %s", args[1])
 			}
-			fmt.Print(tui.RenderWikiLinks(content, dir))
-			return nil
+			return renderShow(content)
 		}
 
-		fmt.Printf("# %s\n\n", list.Title)
-		printItems(list.Items, "", 1, dir)
+		md := todo.Render(list)
+		return renderShow(md)
 		return nil
 	},
+}
+
+func renderShow(md string) error {
+	rendered, err := ai.RenderMarkdown(md)
+	if err != nil {
+		fmt.Print(md)
+		return nil
+	}
+	fmt.Print(rendered)
+	return nil
 }
 
 func init() {

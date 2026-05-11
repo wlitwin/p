@@ -8,7 +8,6 @@ import (
 	"github.com/walter/p/internal/ai"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/project"
-	"github.com/walter/p/internal/tui"
 )
 
 var reviewCmd = &cobra.Command{
@@ -79,18 +78,6 @@ Examples:
 
 		fmt.Fprintf(os.Stderr, "\n--- Changes ---\n%s\n", diff)
 
-		autoYes, _ := cmd.Flags().GetBool("yes")
-		if !autoYes {
-			ok, err := tui.Confirm("Commit these changes?")
-			if err != nil || !ok {
-				if revertErr := git.RevertChanges(dir); revertErr != nil {
-					return fmt.Errorf("reverting changes: %w", revertErr)
-				}
-				fmt.Println("Changes reverted.")
-				return nil
-			}
-		}
-
 		if err := git.CommitAll(dir, "p: AI review"); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
@@ -101,6 +88,5 @@ Examples:
 }
 
 func init() {
-	reviewCmd.Flags().BoolP("yes", "y", false, "Auto-confirm AI changes without prompting")
 	aiCmd.AddCommand(reviewCmd)
 }

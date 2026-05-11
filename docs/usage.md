@@ -390,7 +390,7 @@ The `--continue` / `-c` flag resumes the previous conversation with context.
 ```bash
 p plan api-service "Break down the auth migration into concrete tasks"
 p plan api-service "Review the current state and suggest what's missing"
-p plan api-service "Write up v2 TODOs — v1 is complete" -y  # Auto-confirm
+p plan api-service "Write up v2 TODOs — v1 is complete"
 ```
 
 Plan mode lets the AI create multiple todo items, organize knowledge, and structure work. You'll see a diff of changes and can confirm or revert.
@@ -407,7 +407,6 @@ The `--also` flag includes context from other projects so the AI can reason acro
 
 ```bash
 p ai review api-service
-p ai review api-service -y     # Auto-confirm changes
 ```
 
 The AI reviews recent git history, current todos, and knowledge docs. It can:

@@ -8,7 +8,6 @@ import (
 	"github.com/walter/p/internal/ai"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/project"
-	"github.com/walter/p/internal/tui"
 )
 
 var planCmd = &cobra.Command{
@@ -83,18 +82,6 @@ Examples:
 
 		fmt.Fprintf(os.Stderr, "\n--- Changes ---\n%s\n", diff)
 
-		autoYes, _ := cmd.Flags().GetBool("yes")
-		if !autoYes {
-			ok, err := tui.Confirm("Commit these changes?")
-			if err != nil || !ok {
-				if revertErr := git.RevertChanges(dir); revertErr != nil {
-					return fmt.Errorf("reverting changes: %w", revertErr)
-				}
-				fmt.Println("Changes reverted.")
-				return nil
-			}
-		}
-
 		commitMsg := fmt.Sprintf("p: AI plan — %s", truncate(input, 60))
 		if err := git.CommitAll(dir, commitMsg); err != nil {
 			return fmt.Errorf("committing: %w", err)
@@ -106,7 +93,6 @@ Examples:
 }
 
 func init() {
-	planCmd.Flags().BoolP("yes", "y", false, "Auto-confirm AI changes without prompting")
 	planCmd.Flags().StringSlice("also", nil, "Include context from other projects (comma-separated)")
 	rootCmd.AddCommand(planCmd)
 }
