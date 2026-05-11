@@ -157,6 +157,10 @@ func buildDoPrompt(projectName, projectDir string, list *todo.List, listName str
 	sb.WriteString(projectName)
 	sb.WriteString("\".\n\n")
 
+	fmt.Fprintf(&sb, "Project knowledge base: `%s`\n", projectDir)
+	fmt.Fprintf(&sb, "Knowledge docs are in: `%s/knowledge/`\n", projectDir)
+	fmt.Fprintf(&sb, "Todo lists are in: `%s/todos/`\n\n", projectDir)
+
 	sb.WriteString("## Tasks to implement\n\n")
 	fmt.Fprintf(&sb, "Todo list: **%s**\n\n", listName)
 
