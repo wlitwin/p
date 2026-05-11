@@ -251,7 +251,7 @@ func todoContextTool() mcp.Tool {
 
 // --- Handlers ---
 
-func (s *serverCtx) handleProjectList(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleProjectList(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	projects, err := project.List(s.projectRoot, true)
 	if err != nil {
 		return errResult("listing projects: %v", err)
@@ -275,7 +275,7 @@ func (s *serverCtx) handleProjectList(_ context.Context, _ mcp.CallToolRequest) 
 	return textResult(sb.String()), nil
 }
 
-func (s *serverCtx) handleTodoList(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	dir, r, err := s.resolve(proj)
 	if r != nil {
@@ -301,7 +301,7 @@ func (s *serverCtx) handleTodoList(_ context.Context, req mcp.CallToolRequest) (
 	return textResult(todo.Render(list)), nil
 }
 
-func (s *serverCtx) handleKnowledgeRead(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleKnowledgeRead(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	dir, r, err := s.resolve(proj)
 	if r != nil {
@@ -327,7 +327,7 @@ func (s *serverCtx) handleKnowledgeRead(_ context.Context, req mcp.CallToolReque
 	return textResult(content), nil
 }
 
-func (s *serverCtx) handleTodoAdd(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 	text := req.GetString("text", "")
@@ -345,14 +345,14 @@ func (s *serverCtx) handleTodoAdd(_ context.Context, req mcp.CallToolRequest) (*
 	due := req.GetString("due", "")
 	parentID := req.GetString("parent_id", "")
 
-	if err := service.AddItem(dir, listName, text, priority, due, parentID); err != nil {
+	if err := service.AddItem(ctx, dir, listName, text, priority, due, parentID); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Added todo: %s", text)), nil
 }
 
-func (s *serverCtx) handleTodoUpdate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 	itemID := req.GetString("item_id", "")
@@ -367,14 +367,14 @@ func (s *serverCtx) handleTodoUpdate(_ context.Context, req mcp.CallToolRequest)
 		return r, err
 	}
 
-	if err := service.UpdateItemText(dir, listName, itemID, text); err != nil {
+	if err := service.UpdateItemText(ctx, dir, listName, itemID, text); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Updated %s #%s", listName, itemID)), nil
 }
 
-func (s *serverCtx) handleTodoState(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoState(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 	itemID := req.GetString("item_id", "")
@@ -393,14 +393,14 @@ func (s *serverCtx) handleTodoState(_ context.Context, req mcp.CallToolRequest) 
 		return r, err
 	}
 
-	if err := service.SetItemState(dir, listName, itemID, todo.State(state)); err != nil {
+	if err := service.SetItemState(ctx, dir, listName, itemID, todo.State(state)); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Set %s #%s to %s", listName, itemID, state)), nil
 }
 
-func (s *serverCtx) handleTodoRemove(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoRemove(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 	itemID := req.GetString("item_id", "")
@@ -414,14 +414,14 @@ func (s *serverCtx) handleTodoRemove(_ context.Context, req mcp.CallToolRequest)
 		return r, err
 	}
 
-	if err := service.RemoveItem(dir, listName, itemID); err != nil {
+	if err := service.RemoveItem(ctx, dir, listName, itemID); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Removed %s #%s", listName, itemID)), nil
 }
 
-func (s *serverCtx) handleKnowledgeCreate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleKnowledgeCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	filename := req.GetString("filename", "")
 	title := req.GetString("title", "")
@@ -443,14 +443,14 @@ func (s *serverCtx) handleKnowledgeCreate(_ context.Context, req mcp.CallToolReq
 		}
 	}
 
-	if err := service.KnowledgeCreate(dir, filename, title, tags); err != nil {
+	if err := service.KnowledgeCreate(ctx, dir, filename, title, tags); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Created knowledge/%s.md", filename)), nil
 }
 
-func (s *serverCtx) handleKnowledgeAppend(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleKnowledgeAppend(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	filename := req.GetString("filename", "")
 	content := req.GetString("content", "")
@@ -466,14 +466,14 @@ func (s *serverCtx) handleKnowledgeAppend(_ context.Context, req mcp.CallToolReq
 
 	section := req.GetString("section", "")
 
-	if err := service.KnowledgeAppend(dir, filename, content, section); err != nil {
+	if err := service.KnowledgeAppend(ctx, dir, filename, content, section); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Appended to knowledge/%s.md", filename)), nil
 }
 
-func (s *serverCtx) handleKnowledgeReplace(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleKnowledgeReplace(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	filename := req.GetString("filename", "")
 	section := req.GetString("section", "")
@@ -488,14 +488,14 @@ func (s *serverCtx) handleKnowledgeReplace(_ context.Context, req mcp.CallToolRe
 		return r, err
 	}
 
-	if err := service.KnowledgeReplace(dir, filename, section, content); err != nil {
+	if err := service.KnowledgeReplace(ctx, dir, filename, section, content); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Replaced section %q in knowledge/%s.md", section, filename)), nil
 }
 
-func (s *serverCtx) handleKnowledgeRename(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleKnowledgeRename(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	oldName := req.GetString("old_filename", "")
 	newName := req.GetString("new_filename", "")
@@ -509,14 +509,14 @@ func (s *serverCtx) handleKnowledgeRename(_ context.Context, req mcp.CallToolReq
 		return r, err
 	}
 
-	if err := service.KnowledgeRename(dir, oldName, newName); err != nil {
+	if err := service.KnowledgeRename(ctx, dir, oldName, newName); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Renamed knowledge/%s.md to knowledge/%s.md", oldName, newName)), nil
 }
 
-func (s *serverCtx) handleTodoMove(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoMove(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 	itemID := req.GetString("item_id", "")
@@ -531,14 +531,14 @@ func (s *serverCtx) handleTodoMove(_ context.Context, req mcp.CallToolRequest) (
 		return r, err
 	}
 
-	if err := service.MoveItem(dir, listName, itemID, targetList); err != nil {
+	if err := service.MoveItem(ctx, dir, listName, itemID, targetList); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Moved %s #%s to %s", listName, itemID, targetList)), nil
 }
 
-func (s *serverCtx) handleKnowledgeDelete(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleKnowledgeDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	filename := req.GetString("filename", "")
 
@@ -554,7 +554,7 @@ func (s *serverCtx) handleKnowledgeDelete(_ context.Context, req mcp.CallToolReq
 	// Check for referencing lists before deleting
 	refs := knowledge.FindReferencingLists(dir, filename)
 
-	if err := service.KnowledgeDelete(dir, filename); err != nil {
+	if err := service.KnowledgeDelete(ctx, dir, filename); err != nil {
 		return errResult("%v", err)
 	}
 
@@ -565,7 +565,7 @@ func (s *serverCtx) handleKnowledgeDelete(_ context.Context, req mcp.CallToolReq
 	return textResult(msg), nil
 }
 
-func (s *serverCtx) handleTodoContext(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoContext(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 
@@ -581,7 +581,7 @@ func (s *serverCtx) handleTodoContext(_ context.Context, req mcp.CallToolRequest
 	clearFlag := req.GetBool("clear", false)
 
 	if clearFlag {
-		if err := service.SetListContext(dir, listName, nil); err != nil {
+		if err := service.SetListContext(ctx, dir, listName, nil); err != nil {
 			return errResult("%v", err)
 		}
 		return textResult(fmt.Sprintf("Cleared context on %s (will use project default or all docs)", listName)), nil
@@ -600,7 +600,7 @@ func (s *serverCtx) handleTodoContext(_ context.Context, req mcp.CallToolRequest
 		}
 	}
 
-	if err := service.SetListContext(dir, listName, patterns); err != nil {
+	if err := service.SetListContext(ctx, dir, listName, patterns); err != nil {
 		return errResult("%v", err)
 	}
 

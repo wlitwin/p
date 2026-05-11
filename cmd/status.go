@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -17,14 +18,15 @@ var statusCmd = &cobra.Command{
 			return err
 		}
 
+		ctx := cmd.Context()
 		if len(args) == 1 {
-			return projectStatus(args[0])
+			return projectStatus(ctx, args[0])
 		}
-		return overallStatus()
+		return overallStatus(ctx)
 	},
 }
 
-func overallStatus() error {
+func overallStatus(ctx context.Context) error {
 	projects, err := project.List(cfg.ProjectRoot, false)
 	if err != nil {
 		return err
@@ -41,7 +43,7 @@ func overallStatus() error {
 			continue
 		}
 
-		totalOpen, totalDone, totalBlocked := service.ProjectTotals(dir)
+		totalOpen, totalDone, totalBlocked := service.ProjectTotals(ctx, dir)
 
 		desc := ""
 		if p.Description != "" {
@@ -53,7 +55,7 @@ func overallStatus() error {
 	return nil
 }
 
-func projectStatus(name string) error {
+func projectStatus(ctx context.Context, name string) error {
 	dir, err := project.Resolve(cfg.ProjectRoot, name)
 	if err != nil {
 		return err
@@ -74,7 +76,7 @@ func projectStatus(name string) error {
 	}
 	fmt.Println()
 
-	statuses, err := service.GetProjectListStatuses(dir)
+	statuses, err := service.GetProjectListStatuses(ctx, dir)
 	if err != nil {
 		return err
 	}

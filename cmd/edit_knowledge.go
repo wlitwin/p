@@ -29,11 +29,11 @@ var editKnowledgeCreateCmd = &cobra.Command{
 				}
 			}
 
-			if err := service.KnowledgeCreate(dir, args[1], args[2], tags); err != nil {
+			if err := service.KnowledgeCreate(cmd.Context(), dir, args[1], args[2], tags); err != nil {
 				return err
 			}
 
-			if err := service.Commit(dir, fmt.Sprintf("p: create knowledge doc %q", args[2])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: create knowledge doc %q", args[2])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 
@@ -51,11 +51,11 @@ var editKnowledgeAppendCmd = &cobra.Command{
 		return withProjectLock(args[0], func(dir string) error {
 			section, _ := cmd.Flags().GetString("section")
 
-			if err := service.KnowledgeAppend(dir, args[1], args[2], section); err != nil {
+			if err := service.KnowledgeAppend(cmd.Context(), dir, args[1], args[2], section); err != nil {
 				return err
 			}
 
-			if err := service.Commit(dir, fmt.Sprintf("p: append to knowledge/%s", args[1])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: append to knowledge/%s", args[1])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 
@@ -76,11 +76,11 @@ var editKnowledgeReplaceCmd = &cobra.Command{
 				return fmt.Errorf("--section is required for replace")
 			}
 
-			if err := service.KnowledgeReplace(dir, args[1], section, args[2]); err != nil {
+			if err := service.KnowledgeReplace(cmd.Context(), dir, args[1], section, args[2]); err != nil {
 				return err
 			}
 
-			if err := service.Commit(dir, fmt.Sprintf("p: replace section %q in knowledge/%s", section, args[1])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: replace section %q in knowledge/%s", section, args[1])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 
@@ -96,11 +96,11 @@ var editKnowledgeRenameCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withProjectLock(args[0], func(dir string) error {
-			if err := service.KnowledgeRename(dir, args[1], args[2]); err != nil {
+			if err := service.KnowledgeRename(cmd.Context(), dir, args[1], args[2]); err != nil {
 				return err
 			}
 
-			if err := service.Commit(dir, fmt.Sprintf("p: rename knowledge/%s to knowledge/%s", args[1], args[2])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: rename knowledge/%s to knowledge/%s", args[1], args[2])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 

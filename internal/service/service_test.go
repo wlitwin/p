@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -31,7 +32,7 @@ func setupTestProject(t *testing.T) string {
 func TestSetItemState(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := SetItemState(dir, "tasks", "1", todo.Done); err != nil {
+	if err := SetItemState(context.Background(), dir, "tasks", "1", todo.Done); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,7 +45,7 @@ func TestSetItemState(t *testing.T) {
 func TestSetItemPriority(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := SetItemPriority(dir, "tasks", "1", todo.Backlog); err != nil {
+	if err := SetItemPriority(context.Background(), dir, "tasks", "1", todo.Backlog); err != nil {
 		t.Fatal(err)
 	}
 
@@ -57,7 +58,7 @@ func TestSetItemPriority(t *testing.T) {
 func TestSetItemDue(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := SetItemDue(dir, "tasks", "1", "2026-12-31"); err != nil {
+	if err := SetItemDue(context.Background(), dir, "tasks", "1", "2026-12-31"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,7 +71,7 @@ func TestSetItemDue(t *testing.T) {
 func TestUpdateItemText(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := UpdateItemText(dir, "tasks", "1", "Updated text"); err != nil {
+	if err := UpdateItemText(context.Background(), dir, "tasks", "1", "Updated text"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -83,7 +84,7 @@ func TestUpdateItemText(t *testing.T) {
 func TestRemoveItem(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := RemoveItem(dir, "tasks", "1"); err != nil {
+	if err := RemoveItem(context.Background(), dir, "tasks", "1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,7 +97,7 @@ func TestRemoveItem(t *testing.T) {
 func TestAddItem(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := AddItem(dir, "tasks", "Third task", todo.Now, "", ""); err != nil {
+	if err := AddItem(context.Background(), dir, "tasks", "Third task", todo.Now, "", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -109,7 +110,7 @@ func TestAddItem(t *testing.T) {
 func TestAddItemWithParent(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := AddItem(dir, "tasks", "Subtask", todo.Now, "", "1"); err != nil {
+	if err := AddItem(context.Background(), dir, "tasks", "Subtask", todo.Now, "", "1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -125,7 +126,7 @@ func TestAddItemWithParent(t *testing.T) {
 func TestAddItemCreatesNewList(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := AddItem(dir, "new-list", "New task", todo.Now, "", ""); err != nil {
+	if err := AddItem(context.Background(), dir, "new-list", "New task", todo.Now, "", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -141,7 +142,7 @@ func TestAddItemCreatesNewList(t *testing.T) {
 func TestMoveItem(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := MoveItem(dir, "tasks", "1", "done-tasks"); err != nil {
+	if err := MoveItem(context.Background(), dir, "tasks", "1", "done-tasks"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -162,7 +163,7 @@ func TestMoveItem(t *testing.T) {
 func TestRemoveList(t *testing.T) {
 	dir := setupTestProject(t)
 
-	if err := RemoveList(dir, "tasks"); err != nil {
+	if err := RemoveList(context.Background(), dir, "tasks"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -175,7 +176,7 @@ func TestRemoveList(t *testing.T) {
 func TestRemoveListNotFound(t *testing.T) {
 	dir := setupTestProject(t)
 
-	err := RemoveList(dir, "nonexistent")
+	err := RemoveList(context.Background(), dir, "nonexistent")
 	if err == nil {
 		t.Error("expected error for nonexistent list")
 	}
@@ -184,7 +185,7 @@ func TestRemoveListNotFound(t *testing.T) {
 func TestGetProjectListStatuses(t *testing.T) {
 	dir := setupTestProject(t)
 
-	statuses, err := GetProjectListStatuses(dir)
+	statuses, err := GetProjectListStatuses(context.Background(), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,9 +204,9 @@ func TestProjectTotals(t *testing.T) {
 	dir := setupTestProject(t)
 
 	// Mark one as done to have a mix
-	SetItemState(dir, "tasks", "1", todo.Done)
+	SetItemState(context.Background(), dir, "tasks", "1", todo.Done)
 
-	open, done, blocked := ProjectTotals(dir)
+	open, done, blocked := ProjectTotals(context.Background(), dir)
 	if open != 1 {
 		t.Errorf("expected 1 open, got %d", open)
 	}
@@ -221,7 +222,7 @@ func TestSearchProject(t *testing.T) {
 	dir := setupTestProject(t)
 
 	// Search for a todo item
-	matches := SearchProject(dir, "test-project", "first")
+	matches := SearchProject(context.Background(), dir, "test-project", "first")
 	found := false
 	for _, m := range matches {
 		if m.Type == "todo" {
@@ -237,7 +238,7 @@ func TestSearchProject(t *testing.T) {
 	}
 
 	// Search for knowledge content
-	matches = SearchProject(dir, "test-project", "overview content")
+	matches = SearchProject(context.Background(), dir, "test-project", "overview content")
 	found = false
 	for _, m := range matches {
 		if m.Type == "knowledge" && m.File == "overview" {
@@ -249,7 +250,7 @@ func TestSearchProject(t *testing.T) {
 	}
 
 	// Search for non-existent
-	matches = SearchProject(dir, "test-project", "nonexistent_xyz")
+	matches = SearchProject(context.Background(), dir, "test-project", "nonexistent_xyz")
 	if len(matches) != 0 {
 		t.Errorf("expected no matches, got %d", len(matches))
 	}
@@ -259,7 +260,7 @@ func TestKnowledgeCRUD(t *testing.T) {
 	dir := setupTestProject(t)
 
 	// Create
-	if err := KnowledgeCreate(dir, "new-doc", "New Doc", []string{"test"}); err != nil {
+	if err := KnowledgeCreate(context.Background(), dir, "new-doc", "New Doc", []string{"test"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -272,7 +273,7 @@ func TestKnowledgeCRUD(t *testing.T) {
 	}
 
 	// Append
-	if err := KnowledgeAppend(dir, "new-doc", "Appended content.", ""); err != nil {
+	if err := KnowledgeAppend(context.Background(), dir, "new-doc", "Appended content.", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -282,7 +283,7 @@ func TestKnowledgeCRUD(t *testing.T) {
 	}
 
 	// Rename
-	if err := KnowledgeRename(dir, "new-doc", "renamed-doc"); err != nil {
+	if err := KnowledgeRename(context.Background(), dir, "new-doc", "renamed-doc"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -292,7 +293,7 @@ func TestKnowledgeCRUD(t *testing.T) {
 	}
 
 	// Delete
-	if err := KnowledgeDelete(dir, "renamed-doc"); err != nil {
+	if err := KnowledgeDelete(context.Background(), dir, "renamed-doc"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -306,7 +307,7 @@ func TestSetItemTags(t *testing.T) {
 	dir := setupTestProject(t)
 
 	// Add tags
-	tags, err := SetItemTags(dir, "tasks", "1", []string{"bug", "frontend"}, false)
+	tags, err := SetItemTags(context.Background(), dir, "tasks", "1", []string{"bug", "frontend"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +316,7 @@ func TestSetItemTags(t *testing.T) {
 	}
 
 	// Remove tags
-	tags, err = SetItemTags(dir, "tasks", "1", []string{"bug"}, true)
+	tags, err = SetItemTags(context.Background(), dir, "tasks", "1", []string{"bug"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +328,7 @@ func TestSetItemTags(t *testing.T) {
 func TestSetItemStateInvalidItem(t *testing.T) {
 	dir := setupTestProject(t)
 
-	err := SetItemState(dir, "tasks", "99", todo.Done)
+	err := SetItemState(context.Background(), dir, "tasks", "99", todo.Done)
 	if err == nil {
 		t.Error("expected error for invalid item ID")
 	}
@@ -336,7 +337,7 @@ func TestSetItemStateInvalidItem(t *testing.T) {
 func TestSetItemStateInvalidList(t *testing.T) {
 	dir := setupTestProject(t)
 
-	err := SetItemState(dir, "nonexistent", "1", todo.Done)
+	err := SetItemState(context.Background(), dir, "nonexistent", "1", todo.Done)
 	if err == nil {
 		t.Error("expected error for nonexistent list")
 	}

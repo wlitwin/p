@@ -13,10 +13,10 @@ var moveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withProjectLock(args[0], func(dir string) error {
-			if err := service.MoveItem(dir, args[1], args[2], args[3]); err != nil {
+			if err := service.MoveItem(cmd.Context(), dir, args[1], args[2], args[3]); err != nil {
 				return err
 			}
-			if err := service.Commit(dir, fmt.Sprintf("p: move %s #%s to %s", args[1], args[2], args[3])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: move %s #%s to %s", args[1], args[2], args[3])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 			fmt.Printf("Moved %s #%s → %s\n", args[1], args[2], args[3])

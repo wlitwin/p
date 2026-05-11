@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +29,7 @@ func configureGit(t *testing.T, dir string) {
 func initRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := Init(dir); err != nil {
+	if err := Init(context.Background(), dir); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 	configureGit(t, dir)
@@ -50,7 +51,7 @@ func gitOutput(t *testing.T, dir string, args ...string) string {
 func TestInit(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := Init(dir); err != nil {
+	if err := Init(context.Background(), dir); err != nil {
 		t.Fatalf("Init returned error: %v", err)
 	}
 
@@ -67,10 +68,10 @@ func TestInit(t *testing.T) {
 func TestInitIdempotent(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := Init(dir); err != nil {
+	if err := Init(context.Background(), dir); err != nil {
 		t.Fatalf("first Init: %v", err)
 	}
-	if err := Init(dir); err != nil {
+	if err := Init(context.Background(), dir); err != nil {
 		t.Fatalf("second Init: %v", err)
 	}
 
@@ -89,7 +90,7 @@ func TestCommitAll(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if err := CommitAll(dir, "add hello"); err != nil {
+	if err := CommitAll(context.Background(), dir, "add hello"); err != nil {
 		t.Fatalf("CommitAll: %v", err)
 	}
 
@@ -114,12 +115,12 @@ func TestCommitAllNoChanges(t *testing.T) {
 	if err := os.WriteFile(testFile, []byte("init\n"), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if err := CommitAll(dir, "initial"); err != nil {
+	if err := CommitAll(context.Background(), dir, "initial"); err != nil {
 		t.Fatalf("CommitAll (initial): %v", err)
 	}
 
 	// Commit again with no changes — should be a no-op and not error.
-	if err := CommitAll(dir, "no changes"); err != nil {
+	if err := CommitAll(context.Background(), dir, "no changes"); err != nil {
 		t.Fatalf("CommitAll (no changes) returned error: %v", err)
 	}
 
@@ -139,7 +140,7 @@ func TestDiff(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	diff, err := Diff(dir)
+	diff, err := Diff(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("Diff: %v", err)
 	}
@@ -163,7 +164,7 @@ func TestDiffWithExistingCommits(t *testing.T) {
 	if err := os.WriteFile(testFile, []byte("line one\n"), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if err := CommitAll(dir, "initial"); err != nil {
+	if err := CommitAll(context.Background(), dir, "initial"); err != nil {
 		t.Fatalf("CommitAll: %v", err)
 	}
 
@@ -172,7 +173,7 @@ func TestDiffWithExistingCommits(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	diff, err := Diff(dir)
+	diff, err := Diff(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("Diff: %v", err)
 	}
@@ -190,7 +191,7 @@ func TestDiffStat(t *testing.T) {
 	if err := os.WriteFile(testFile, []byte("original\n"), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if err := CommitAll(dir, "initial"); err != nil {
+	if err := CommitAll(context.Background(), dir, "initial"); err != nil {
 		t.Fatalf("CommitAll: %v", err)
 	}
 
@@ -199,7 +200,7 @@ func TestDiffStat(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	stat, err := DiffStat(dir)
+	stat, err := DiffStat(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("DiffStat: %v", err)
 	}
@@ -221,7 +222,7 @@ func TestRevertChanges(t *testing.T) {
 	if err := os.WriteFile(trackedFile, []byte("keep me\n"), 0644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if err := CommitAll(dir, "initial"); err != nil {
+	if err := CommitAll(context.Background(), dir, "initial"); err != nil {
 		t.Fatalf("CommitAll: %v", err)
 	}
 
@@ -236,7 +237,7 @@ func TestRevertChanges(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if err := RevertChanges(dir); err != nil {
+	if err := RevertChanges(context.Background(), dir); err != nil {
 		t.Fatalf("RevertChanges: %v", err)
 	}
 

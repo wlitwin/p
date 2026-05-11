@@ -9,6 +9,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -21,7 +22,7 @@ import (
 )
 
 // SetItemState loads a list, changes an item's state, and saves.
-func SetItemState(dir, listName, itemID string, state todo.State) error {
+func SetItemState(_ context.Context, dir, listName, itemID string, state todo.State) error {
 	list, err := todo.LoadList(dir, listName)
 	if err != nil {
 		return err
@@ -38,7 +39,7 @@ func SetItemState(dir, listName, itemID string, state todo.State) error {
 }
 
 // SetItemPriority loads a list, changes an item's priority, and saves.
-func SetItemPriority(dir, listName, itemID string, priority todo.Priority) error {
+func SetItemPriority(_ context.Context, dir, listName, itemID string, priority todo.Priority) error {
 	list, err := todo.LoadList(dir, listName)
 	if err != nil {
 		return err
@@ -55,7 +56,7 @@ func SetItemPriority(dir, listName, itemID string, priority todo.Priority) error
 }
 
 // SetItemDue loads a list, changes an item's due date, and saves.
-func SetItemDue(dir, listName, itemID, due string) error {
+func SetItemDue(_ context.Context, dir, listName, itemID, due string) error {
 	list, err := todo.LoadList(dir, listName)
 	if err != nil {
 		return err
@@ -72,7 +73,7 @@ func SetItemDue(dir, listName, itemID, due string) error {
 }
 
 // UpdateItemText loads a list, changes an item's text, and saves.
-func UpdateItemText(dir, listName, itemID, text string) error {
+func UpdateItemText(_ context.Context, dir, listName, itemID, text string) error {
 	list, err := todo.LoadList(dir, listName)
 	if err != nil {
 		return err
@@ -89,7 +90,7 @@ func UpdateItemText(dir, listName, itemID, text string) error {
 }
 
 // RemoveItem loads a list, removes an item, and saves.
-func RemoveItem(dir, listName, itemID string) error {
+func RemoveItem(_ context.Context, dir, listName, itemID string) error {
 	list, err := todo.LoadList(dir, listName)
 	if err != nil {
 		return err
@@ -104,7 +105,7 @@ func RemoveItem(dir, listName, itemID string) error {
 
 // AddItem loads (or creates) a list, adds an item, and saves.
 // If parentID is non-empty, the item is nested under the specified parent.
-func AddItem(dir, listName, text string, priority todo.Priority, due, parentID string) error {
+func AddItem(_ context.Context, dir, listName, text string, priority todo.Priority, due, parentID string) error {
 	if err := validate.ListName(listName); err != nil {
 		return err
 	}
@@ -132,7 +133,7 @@ func AddItem(dir, listName, text string, priority todo.Priority, due, parentID s
 }
 
 // MoveItem moves an item from one list to another and saves both lists.
-func MoveItem(dir, srcListName, itemID, dstListName string) error {
+func MoveItem(_ context.Context, dir, srcListName, itemID, dstListName string) error {
 	srcList, err := todo.LoadList(dir, srcListName)
 	if err != nil {
 		return fmt.Errorf("loading source list: %w", err)
@@ -170,7 +171,7 @@ func MoveItem(dir, srcListName, itemID, dstListName string) error {
 }
 
 // RemoveList deletes a todo list file.
-func RemoveList(dir, listName string) error {
+func RemoveList(_ context.Context, dir, listName string) error {
 	path := todo.ListPath(dir, listName)
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("todo list %q not found", listName)
@@ -192,7 +193,7 @@ type ListStatus struct {
 }
 
 // GetProjectListStatuses returns per-list item counts for a project.
-func GetProjectListStatuses(dir string) ([]ListStatus, error) {
+func GetProjectListStatuses(_ context.Context, dir string) ([]ListStatus, error) {
 	names, err := todo.ListNames(dir)
 	if err != nil {
 		return nil, err
@@ -216,8 +217,8 @@ func GetProjectListStatuses(dir string) ([]ListStatus, error) {
 }
 
 // ProjectTotals returns aggregate item counts across all lists in a project.
-func ProjectTotals(dir string) (open, done, blocked int) {
-	statuses, err := GetProjectListStatuses(dir)
+func ProjectTotals(ctx context.Context, dir string) (open, done, blocked int) {
+	statuses, err := GetProjectListStatuses(ctx, dir)
 	if err != nil {
 		return
 	}
@@ -242,7 +243,7 @@ type SearchMatch struct {
 }
 
 // SearchProject searches all todos and knowledge docs in a project for a query.
-func SearchProject(dir, projectName, queryLower string) []SearchMatch {
+func SearchProject(_ context.Context, dir, projectName, queryLower string) []SearchMatch {
 	var matches []SearchMatch
 
 	// Search todos
@@ -275,7 +276,7 @@ func SearchProject(dir, projectName, queryLower string) []SearchMatch {
 }
 
 // KnowledgeCreate creates a knowledge doc.
-func KnowledgeCreate(dir, filename, title string, tags []string) error {
+func KnowledgeCreate(_ context.Context, dir, filename, title string, tags []string) error {
 	if err := validate.Filename(filename); err != nil {
 		return err
 	}
@@ -283,27 +284,27 @@ func KnowledgeCreate(dir, filename, title string, tags []string) error {
 }
 
 // KnowledgeAppend appends content to a knowledge doc.
-func KnowledgeAppend(dir, filename, content, section string) error {
+func KnowledgeAppend(_ context.Context, dir, filename, content, section string) error {
 	return knowledge.Append(dir, filename, content, section)
 }
 
 // KnowledgeReplace replaces a section in a knowledge doc.
-func KnowledgeReplace(dir, filename, section, content string) error {
+func KnowledgeReplace(_ context.Context, dir, filename, section, content string) error {
 	return knowledge.ReplaceSection(dir, filename, section, content)
 }
 
 // KnowledgeRename renames a knowledge doc.
-func KnowledgeRename(dir, oldName, newName string) error {
+func KnowledgeRename(_ context.Context, dir, oldName, newName string) error {
 	return knowledge.Rename(dir, oldName, newName)
 }
 
 // KnowledgeDelete deletes a knowledge doc.
-func KnowledgeDelete(dir, filename string) error {
+func KnowledgeDelete(_ context.Context, dir, filename string) error {
 	return knowledge.Delete(dir, filename)
 }
 
 // ProjectCreate creates a new project with directory structure and git init.
-func ProjectCreate(projectRoot, name, description string) error {
+func ProjectCreate(ctx context.Context, projectRoot, name, description string) error {
 	if err := validate.ProjectName(name); err != nil {
 		return err
 	}
@@ -313,16 +314,16 @@ func ProjectCreate(projectRoot, name, description string) error {
 	}
 
 	dir := fmt.Sprintf("%s/%s", projectRoot, name)
-	if err := git.Init(dir); err != nil {
+	if err := git.Init(ctx, dir); err != nil {
 		return fmt.Errorf("git init: %w", err)
 	}
 
-	_ = git.CommitAll(dir, fmt.Sprintf("p: create project %q", name))
+	_ = git.CommitAll(ctx, dir, fmt.Sprintf("p: create project %q", name))
 	return nil
 }
 
 // ProjectArchive sets the archived state on a project and commits.
-func ProjectArchive(dir, projectName string, archived bool) error {
+func ProjectArchive(ctx context.Context, dir, projectName string, archived bool) error {
 	meta, err := project.LoadMeta(dir)
 	if err != nil {
 		return err
@@ -337,12 +338,12 @@ func ProjectArchive(dir, projectName string, archived bool) error {
 	if !archived {
 		action = "unarchived"
 	}
-	_ = git.CommitAll(dir, fmt.Sprintf("p: %s project %q", action, projectName))
+	_ = git.CommitAll(ctx, dir, fmt.Sprintf("p: %s project %q", action, projectName))
 	return nil
 }
 
 // SetItemTags loads a list, modifies tags on an item, and saves.
-func SetItemTags(dir, listName, itemID string, tags []string, remove bool) ([]string, error) {
+func SetItemTags(_ context.Context, dir, listName, itemID string, tags []string, remove bool) ([]string, error) {
 	list, err := todo.LoadList(dir, listName)
 	if err != nil {
 		return nil, err
@@ -396,7 +397,7 @@ func removeTags(existing, toRemove []string) []string {
 
 // SetListContext loads a list, sets (or clears) its context patterns, and saves.
 // If patterns is nil, the context field is removed (reverts to default/all).
-func SetListContext(dir, listName string, patterns []string) error {
+func SetListContext(_ context.Context, dir, listName string, patterns []string) error {
 	list, err := todo.LoadList(dir, listName)
 	if err != nil {
 		return err
@@ -408,7 +409,7 @@ func SetListContext(dir, listName string, patterns []string) error {
 
 // SetDefaultContext loads project meta, sets (or clears) the default context
 // patterns, and saves.
-func SetDefaultContext(dir string, patterns []string) error {
+func SetDefaultContext(_ context.Context, dir string, patterns []string) error {
 	meta, err := project.LoadMeta(dir)
 	if err != nil {
 		return err
@@ -419,22 +420,22 @@ func SetDefaultContext(dir string, patterns []string) error {
 }
 
 // AssetAdd copies a file into the project's assets directory.
-func AssetAdd(dir, srcPath string) (string, error) {
+func AssetAdd(_ context.Context, dir, srcPath string) (string, error) {
 	return asset.Copy(dir, srcPath)
 }
 
 // AssetList returns the names of all assets in a project.
-func AssetList(dir string) ([]asset.Info, error) {
+func AssetList(_ context.Context, dir string) ([]asset.Info, error) {
 	return asset.ListWithInfo(dir)
 }
 
 // AssetDelete removes an asset from a project.
-func AssetDelete(dir, filename string) error {
+func AssetDelete(_ context.Context, dir, filename string) error {
 	return asset.Delete(dir, filename)
 }
 
 // Commit is a convenience wrapper around git.CommitAll for callers (like the
 // CLI) that need to commit after a service operation.
-func Commit(dir, message string) error {
-	return git.CommitAll(dir, message)
+func Commit(ctx context.Context, dir, message string) error {
+	return git.CommitAll(ctx, dir, message)
 }

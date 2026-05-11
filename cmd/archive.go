@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -13,7 +14,7 @@ var archiveCmd = &cobra.Command{
 	Short: "Archive a project",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return setArchived(args[0], true)
+		return setArchived(cmd.Context(), args[0], true)
 	},
 }
 
@@ -22,11 +23,11 @@ var unarchiveCmd = &cobra.Command{
 	Short: "Unarchive a project",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return setArchived(args[0], false)
+		return setArchived(cmd.Context(), args[0], false)
 	},
 }
 
-func setArchived(name string, archived bool) error {
+func setArchived(ctx context.Context, name string, archived bool) error {
 	if err := requireProjectRoot(); err != nil {
 		return err
 	}
@@ -51,7 +52,7 @@ func setArchived(name string, archived bool) error {
 		action = "unarchived"
 	}
 
-	if err := git.CommitAll(dir, fmt.Sprintf("p: %s project %q", action, name)); err != nil {
+	if err := git.CommitAll(ctx, dir, fmt.Sprintf("p: %s project %q", action, name)); err != nil {
 		return fmt.Errorf("committing: %w", err)
 	}
 

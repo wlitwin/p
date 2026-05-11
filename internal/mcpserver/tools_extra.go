@@ -117,7 +117,7 @@ func assetRemoveTool() mcp.Tool {
 
 // --- Handlers ---
 
-func (s *serverCtx) handleProjectCreate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleProjectCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name := req.GetString("name", "")
 	if name == "" {
 		return errResult("name is required")
@@ -125,14 +125,14 @@ func (s *serverCtx) handleProjectCreate(_ context.Context, req mcp.CallToolReque
 
 	desc := req.GetString("description", "")
 
-	if err := service.ProjectCreate(s.projectRoot, name, desc); err != nil {
+	if err := service.ProjectCreate(ctx, s.projectRoot, name, desc); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Created project %q", name)), nil
 }
 
-func (s *serverCtx) handleProjectArchive(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleProjectArchive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	if proj == "" {
 		return errResult("project is required")
@@ -145,7 +145,7 @@ func (s *serverCtx) handleProjectArchive(_ context.Context, req mcp.CallToolRequ
 		return r, err
 	}
 
-	if err := service.ProjectArchive(dir, proj, archived); err != nil {
+	if err := service.ProjectArchive(ctx, dir, proj, archived); err != nil {
 		return errResult("%v", err)
 	}
 
@@ -156,11 +156,11 @@ func (s *serverCtx) handleProjectArchive(_ context.Context, req mcp.CallToolRequ
 	return textResult(fmt.Sprintf("Project %q %s", proj, action)), nil
 }
 
-func (s *serverCtx) handleStatus(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleStatus(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 
 	if proj != "" {
-		return s.projectStatus(proj)
+		return s.projectStatus(ctx, proj)
 	}
 
 	projects, err := project.List(s.projectRoot, false)
@@ -174,13 +174,13 @@ func (s *serverCtx) handleStatus(_ context.Context, req mcp.CallToolRequest) (*m
 		if err != nil {
 			continue
 		}
-		totalOpen, totalDone, totalBlocked := service.ProjectTotals(dir)
+		totalOpen, totalDone, totalBlocked := service.ProjectTotals(ctx, dir)
 		fmt.Fprintf(&sb, "%s: open=%d blocked=%d done=%d\n", p.Name, totalOpen, totalBlocked, totalDone)
 	}
 	return textResult(sb.String()), nil
 }
 
-func (s *serverCtx) projectStatus(proj string) (*mcp.CallToolResult, error) {
+func (s *serverCtx) projectStatus(ctx context.Context, proj string) (*mcp.CallToolResult, error) {
 	dir, r, err := s.resolve(proj)
 	if r != nil {
 		return r, err
@@ -189,7 +189,7 @@ func (s *serverCtx) projectStatus(proj string) (*mcp.CallToolResult, error) {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Project: %s\n\n", proj)
 
-	statuses, _ := service.GetProjectListStatuses(dir)
+	statuses, _ := service.GetProjectListStatuses(ctx, dir)
 	if len(statuses) == 0 {
 		sb.WriteString("No todo lists.\n")
 	} else {
@@ -206,7 +206,7 @@ func (s *serverCtx) projectStatus(proj string) (*mcp.CallToolResult, error) {
 	return textResult(sb.String()), nil
 }
 
-func (s *serverCtx) handleSearch(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	query := req.GetString("query", "")
 	if query == "" {
 		return errResult("query is required")
@@ -232,7 +232,7 @@ func (s *serverCtx) handleSearch(_ context.Context, req mcp.CallToolRequest) (*m
 			continue
 		}
 
-		matches := service.SearchProject(dir, name, queryLower)
+		matches := service.SearchProject(ctx, dir, name, queryLower)
 		for _, m := range matches {
 			if m.Type == "todo" {
 				for _, r := range m.TodoResults {
@@ -252,7 +252,7 @@ func (s *serverCtx) handleSearch(_ context.Context, req mcp.CallToolRequest) (*m
 	return textResult(sb.String()), nil
 }
 
-func (s *serverCtx) handleTodoPriority(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoPriority(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 	itemID := req.GetString("item_id", "")
@@ -271,14 +271,14 @@ func (s *serverCtx) handleTodoPriority(_ context.Context, req mcp.CallToolReques
 		return r, err
 	}
 
-	if err := service.SetItemPriority(dir, listName, itemID, todo.Priority(priority)); err != nil {
+	if err := service.SetItemPriority(ctx, dir, listName, itemID, todo.Priority(priority)); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Set %s #%s priority to %s", listName, itemID, priority)), nil
 }
 
-func (s *serverCtx) handleTodoDue(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoDue(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 	itemID := req.GetString("item_id", "")
@@ -293,14 +293,14 @@ func (s *serverCtx) handleTodoDue(_ context.Context, req mcp.CallToolRequest) (*
 		return r, err
 	}
 
-	if err := service.SetItemDue(dir, listName, itemID, due); err != nil {
+	if err := service.SetItemDue(ctx, dir, listName, itemID, due); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Set %s #%s due to %s", listName, itemID, due)), nil
 }
 
-func (s *serverCtx) handleTodoRmList(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleTodoRmList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	listName := req.GetString("list", "")
 
@@ -313,14 +313,14 @@ func (s *serverCtx) handleTodoRmList(_ context.Context, req mcp.CallToolRequest)
 		return r, err
 	}
 
-	if err := service.RemoveList(dir, listName); err != nil {
+	if err := service.RemoveList(ctx, dir, listName); err != nil {
 		return errResult("%v", err)
 	}
 
 	return textResult(fmt.Sprintf("Deleted todo list %q", listName)), nil
 }
 
-func (s *serverCtx) handleKnowledgeList(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleKnowledgeList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	if proj == "" {
 		return errResult("project is required")
@@ -366,7 +366,7 @@ func (s *serverCtx) handleKnowledgeList(_ context.Context, req mcp.CallToolReque
 	return textResult(sb.String()), nil
 }
 
-func (s *serverCtx) handleKnowledgeSearch(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleKnowledgeSearch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	query := req.GetString("query", "")
 
@@ -395,7 +395,7 @@ func (s *serverCtx) handleKnowledgeSearch(_ context.Context, req mcp.CallToolReq
 	return textResult(sb.String()), nil
 }
 
-func (s *serverCtx) handleAssetAdd(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleAssetAdd(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	srcPath := req.GetString("source_path", "")
 
@@ -408,7 +408,7 @@ func (s *serverCtx) handleAssetAdd(_ context.Context, req mcp.CallToolRequest) (
 		return r, err
 	}
 
-	filename, err := service.AssetAdd(dir, srcPath)
+	filename, err := service.AssetAdd(ctx, dir, srcPath)
 	if err != nil {
 		return errResult("%v", err)
 	}
@@ -416,7 +416,7 @@ func (s *serverCtx) handleAssetAdd(_ context.Context, req mcp.CallToolRequest) (
 	return textResult(fmt.Sprintf("Added assets/%s", filename)), nil
 }
 
-func (s *serverCtx) handleAssetList(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleAssetList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	if proj == "" {
 		return errResult("project is required")
@@ -427,7 +427,7 @@ func (s *serverCtx) handleAssetList(_ context.Context, req mcp.CallToolRequest) 
 		return r, err
 	}
 
-	infos, err := service.AssetList(dir)
+	infos, err := service.AssetList(ctx, dir)
 	if err != nil {
 		return errResult("%v", err)
 	}
@@ -443,7 +443,7 @@ func (s *serverCtx) handleAssetList(_ context.Context, req mcp.CallToolRequest) 
 	return textResult(sb.String()), nil
 }
 
-func (s *serverCtx) handleAssetRemove(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *serverCtx) handleAssetRemove(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj := req.GetString("project", "")
 	filename := req.GetString("filename", "")
 
@@ -456,7 +456,7 @@ func (s *serverCtx) handleAssetRemove(_ context.Context, req mcp.CallToolRequest
 		return r, err
 	}
 
-	if err := service.AssetDelete(dir, filename); err != nil {
+	if err := service.AssetDelete(ctx, dir, filename); err != nil {
 		return errResult("%v", err)
 	}
 

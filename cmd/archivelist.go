@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,17 +27,18 @@ Examples:
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		restore, _ := cmd.Flags().GetBool("restore")
+		ctx := cmd.Context()
 
 		return withProjectLock(args[0], func(dir string) error {
 			if len(args) == 2 {
-				return archiveOneList(dir, args[1], restore)
+				return archiveOneList(ctx, dir, args[1], restore)
 			}
-			return autoArchiveDone(dir)
+			return autoArchiveDone(ctx, dir)
 		})
 	},
 }
 
-func archiveOneList(dir, listName string, restore bool) error {
+func archiveOneList(ctx context.Context, dir, listName string, restore bool) error {
 	archiveDir := filepath.Join(todo.ListDir(dir), ".archive")
 	activePath := todo.ListPath(dir, listName)
 	archivedPath := filepath.Join(archiveDir, listName+".md")
@@ -48,7 +50,7 @@ func archiveOneList(dir, listName string, restore bool) error {
 		if err := os.Rename(archivedPath, activePath); err != nil {
 			return err
 		}
-		if err := git.CommitAll(dir, fmt.Sprintf("p: restore todo list %s from archive", listName)); err != nil {
+		if err := git.CommitAll(ctx, dir, fmt.Sprintf("p: restore todo list %s from archive", listName)); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
 		fmt.Printf("Restored todo list %q\n", listName)
@@ -62,7 +64,7 @@ func archiveOneList(dir, listName string, restore bool) error {
 		if err := os.Rename(activePath, archivedPath); err != nil {
 			return err
 		}
-		if err := git.CommitAll(dir, fmt.Sprintf("p: archive todo list %s", listName)); err != nil {
+		if err := git.CommitAll(ctx, dir, fmt.Sprintf("p: archive todo list %s", listName)); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
 		fmt.Printf("Archived todo list %q\n", listName)
@@ -70,7 +72,7 @@ func archiveOneList(dir, listName string, restore bool) error {
 	return nil
 }
 
-func autoArchiveDone(dir string) error {
+func autoArchiveDone(ctx context.Context, dir string) error {
 	names, err := todo.ListNames(dir)
 	if err != nil {
 		return err
@@ -83,7 +85,7 @@ func autoArchiveDone(dir string) error {
 			continue
 		}
 		if allDone(list.Items) {
-			if err := archiveOneList(dir, name, false); err != nil {
+			if err := archiveOneList(ctx, dir, name, false); err != nil {
 				fmt.Fprintf(os.Stderr, "warning: could not archive %s: %v\n", name, err)
 				continue
 			}

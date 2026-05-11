@@ -22,7 +22,7 @@ Examples:
 		tags := args[3:]
 
 		return withProjectLock(args[0], func(dir string) error {
-			resultTags, err := service.SetItemTags(dir, args[1], args[2], tags, remove)
+			resultTags, err := service.SetItemTags(cmd.Context(), dir, args[1], args[2], tags, remove)
 			if err != nil {
 				return err
 			}
@@ -32,7 +32,7 @@ Examples:
 				action = "untagged"
 			}
 			commitMsg := fmt.Sprintf("p: %s %s #%s with %s", action, args[1], args[2], strings.Join(tags, ","))
-			if err := service.Commit(dir, commitMsg); err != nil {
+			if err := service.Commit(cmd.Context(), dir, commitMsg); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 

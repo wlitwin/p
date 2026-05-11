@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -33,8 +34,9 @@ var searchCmd = &cobra.Command{
 
 		queryLower := strings.ToLower(query)
 
+		ctx := cmd.Context()
 		if projectName != "" {
-			return searchProject(projectName, queryLower)
+			return searchProject(ctx, projectName, queryLower)
 		}
 
 		projects, err := project.List(cfg.ProjectRoot, false)
@@ -42,19 +44,19 @@ var searchCmd = &cobra.Command{
 			return err
 		}
 		for _, p := range projects {
-			_ = searchProject(p.Name, queryLower)
+			_ = searchProject(ctx, p.Name, queryLower)
 		}
 		return nil
 	},
 }
 
-func searchProject(name, queryLower string) error {
+func searchProject(ctx context.Context, name, queryLower string) error {
 	dir, err := project.Resolve(cfg.ProjectRoot, name)
 	if err != nil {
 		return err
 	}
 
-	matches := service.SearchProject(dir, name, queryLower)
+	matches := service.SearchProject(ctx, dir, name, queryLower)
 	if len(matches) == 0 {
 		return nil
 	}

@@ -67,10 +67,10 @@ Examples:
 				clearFlag, _ := cmd.Flags().GetBool("clear")
 				if clearFlag {
 					return withProjectLock(args[0], func(dir string) error {
-						if err := service.SetDefaultContext(dir, nil); err != nil {
+						if err := service.SetDefaultContext(cmd.Context(), dir, nil); err != nil {
 							return err
 						}
-						if err := service.Commit(dir, "p: clear default-context"); err != nil {
+						if err := service.Commit(cmd.Context(), dir, "p: clear default-context"); err != nil {
 							return fmt.Errorf("committing: %w", err)
 						}
 						fmt.Println("Cleared default-context")
@@ -112,10 +112,10 @@ Examples:
 					if !clearFlag {
 						patterns = args[2:]
 					}
-					if err := service.SetDefaultContext(dir, patterns); err != nil {
+					if err := service.SetDefaultContext(cmd.Context(), dir, patterns); err != nil {
 						return err
 					}
-					if err := service.Commit(dir, fmt.Sprintf("p: set default-context for %s", args[0])); err != nil {
+					if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: set default-context for %s", args[0])); err != nil {
 						return fmt.Errorf("committing: %w", err)
 					}
 					if clearFlag {
@@ -146,7 +146,7 @@ Examples:
 					return err
 				}
 
-				if err := git.CommitAll(dir, fmt.Sprintf("p: set %s=%s for %s", key, value, args[0])); err != nil {
+				if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: set %s=%s for %s", key, value, args[0])); err != nil {
 					return fmt.Errorf("committing: %w", err)
 				}
 

@@ -26,11 +26,11 @@ var editTodoAddCmd = &cobra.Command{
 			due, _ := cmd.Flags().GetString("due")
 			parentID, _ := cmd.Flags().GetString("parent")
 
-			if err := service.AddItem(dir, args[1], args[2], todo.Priority(priority), due, parentID); err != nil {
+			if err := service.AddItem(cmd.Context(), dir, args[1], args[2], todo.Priority(priority), due, parentID); err != nil {
 				return err
 			}
 
-			if err := service.Commit(dir, fmt.Sprintf("p: add todo %q to %s", args[2], args[1])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: add todo %q to %s", args[2], args[1])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 
@@ -46,10 +46,10 @@ var editTodoUpdateCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withProjectLock(args[0], func(dir string) error {
-			if err := service.UpdateItemText(dir, args[1], args[2], args[3]); err != nil {
+			if err := service.UpdateItemText(cmd.Context(), dir, args[1], args[2], args[3]); err != nil {
 				return err
 			}
-			if err := service.Commit(dir, fmt.Sprintf("p: update %s #%s text", args[1], args[2])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: update %s #%s text", args[1], args[2])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 			fmt.Printf("Updated %s #%s\n", args[1], args[2])
@@ -64,10 +64,10 @@ var editTodoStateCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withProjectLock(args[0], func(dir string) error {
-			if err := service.SetItemState(dir, args[1], args[2], todo.State(args[3])); err != nil {
+			if err := service.SetItemState(cmd.Context(), dir, args[1], args[2], todo.State(args[3])); err != nil {
 				return err
 			}
-			if err := service.Commit(dir, fmt.Sprintf("p: mark %s #%s as %s", args[1], args[2], args[3])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: mark %s #%s as %s", args[1], args[2], args[3])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 			fmt.Printf("Marked %s #%s as %s\n", args[1], args[2], args[3])
@@ -82,10 +82,10 @@ var editTodoRemoveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withProjectLock(args[0], func(dir string) error {
-			if err := service.RemoveItem(dir, args[1], args[2]); err != nil {
+			if err := service.RemoveItem(cmd.Context(), dir, args[1], args[2]); err != nil {
 				return err
 			}
-			if err := service.Commit(dir, fmt.Sprintf("p: remove %s #%s", args[1], args[2])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: remove %s #%s", args[1], args[2])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 			fmt.Printf("Removed %s #%s\n", args[1], args[2])

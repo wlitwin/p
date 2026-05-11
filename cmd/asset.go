@@ -25,7 +25,7 @@ var assetAddCmd = &cobra.Command{
 				return err
 			}
 
-			if err := git.CommitAll(dir, fmt.Sprintf("p: add asset %s", filename)); err != nil {
+			if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: add asset %s", filename)); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 
@@ -75,7 +75,7 @@ var assetRemoveCmd = &cobra.Command{
 				return err
 			}
 
-			if err := git.CommitAll(dir, fmt.Sprintf("p: remove asset %s", args[1])); err != nil {
+			if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: remove asset %s", args[1])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 

@@ -59,7 +59,7 @@ var knowledgeDeleteCmd = &cobra.Command{
 			return fmt.Errorf("deleting: %w", err)
 		}
 
-		if err := git.CommitAll(dir, fmt.Sprintf("p: delete knowledge/%s", args[1])); err != nil {
+		if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: delete knowledge/%s", args[1])); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
 
@@ -199,7 +199,7 @@ var knowledgeCreateFromTemplateCmd = &cobra.Command{
 			}
 		}
 
-		if err := git.CommitAll(dir, fmt.Sprintf("p: create knowledge doc %q", args[2])); err != nil {
+		if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: create knowledge doc %q", args[2])); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
 
@@ -300,7 +300,7 @@ Examples:
 				if err := os.Rename(archivedPath, activePath); err != nil {
 					return err
 				}
-				if err := git.CommitAll(dir, fmt.Sprintf("p: restore knowledge/%s from archive", filename)); err != nil {
+				if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: restore knowledge/%s from archive", filename)); err != nil {
 					return fmt.Errorf("committing: %w", err)
 				}
 				fmt.Printf("Restored knowledge/%s.md\n", filename)
@@ -318,7 +318,7 @@ Examples:
 				if err := os.Rename(activePath, archivedPath); err != nil {
 					return err
 				}
-				if err := git.CommitAll(dir, fmt.Sprintf("p: archive knowledge/%s", filename)); err != nil {
+				if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: archive knowledge/%s", filename)); err != nil {
 					return fmt.Errorf("committing: %w", err)
 				}
 				fmt.Printf("Archived knowledge/%s.md\n", filename)

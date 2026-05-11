@@ -30,11 +30,11 @@ var newCmd = &cobra.Command{
 		}
 
 		projectDir := filepath.Join(cfg.ProjectRoot, name)
-		if err := git.Init(projectDir); err != nil {
+		if err := git.Init(cmd.Context(), projectDir); err != nil {
 			return fmt.Errorf("initializing git: %w", err)
 		}
 
-		if err := git.CommitAll(projectDir, fmt.Sprintf("p: create project %q", name)); err != nil {
+		if err := git.CommitAll(cmd.Context(), projectDir, fmt.Sprintf("p: create project %q", name)); err != nil {
 			return fmt.Errorf("initial commit: %w", err)
 		}
 

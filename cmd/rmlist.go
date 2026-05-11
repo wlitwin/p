@@ -25,11 +25,11 @@ var rmListCmd = &cobra.Command{
 				}
 			}
 
-			if err := service.RemoveList(dir, args[1]); err != nil {
+			if err := service.RemoveList(cmd.Context(), dir, args[1]); err != nil {
 				return err
 			}
 
-			if err := service.Commit(dir, fmt.Sprintf("p: delete todo list %s", args[1])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: delete todo list %s", args[1])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 

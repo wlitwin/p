@@ -59,10 +59,10 @@ Examples:
 
 		if clearFlag {
 			return withProjectLock(projectName, func(dir string) error {
-				if err := service.SetListContext(dir, listName, nil); err != nil {
+				if err := service.SetListContext(cmd.Context(), dir, listName, nil); err != nil {
 					return err
 				}
-				if err := service.Commit(dir, fmt.Sprintf("p: clear context on %s", listName)); err != nil {
+				if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: clear context on %s", listName)); err != nil {
 					return fmt.Errorf("committing: %w", err)
 				}
 				fmt.Printf("Cleared context on %s (will use project default or all docs)\n", listName)
@@ -75,10 +75,10 @@ Examples:
 		}
 
 		return withProjectLock(projectName, func(dir string) error {
-			if err := service.SetListContext(dir, listName, patterns); err != nil {
+			if err := service.SetListContext(cmd.Context(), dir, listName, patterns); err != nil {
 				return err
 			}
-			if err := service.Commit(dir, fmt.Sprintf("p: set context on %s: %s", listName, strings.Join(patterns, ", "))); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: set context on %s: %s", listName, strings.Join(patterns, ", "))); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 			fmt.Printf("Set context on %s: %s\n", listName, strings.Join(patterns, ", "))

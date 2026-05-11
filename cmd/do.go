@@ -142,7 +142,7 @@ Examples:
 		}
 
 		// Auto-commit any project changes made during the session
-		if err := git.CommitAll(dir, fmt.Sprintf("p: post-implementation update for %s", listName)); err != nil {
+		if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: post-implementation update for %s", listName)); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
 

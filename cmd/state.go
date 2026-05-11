@@ -19,7 +19,7 @@ func makeStateCmd(name string, state todo.State, short string) *cobra.Command {
 			return withProjectLock(args[0], func(dir string) error {
 				ids := args[2:]
 				for _, id := range ids {
-					if err := service.SetItemState(dir, args[1], id, state); err != nil {
+					if err := service.SetItemState(cmd.Context(), dir, args[1], id, state); err != nil {
 						return err
 					}
 					fmt.Printf("Marked %s #%s as %s\n", args[1], id, state)
@@ -28,7 +28,7 @@ func makeStateCmd(name string, state todo.State, short string) *cobra.Command {
 				if len(ids) > 1 {
 					msg = fmt.Sprintf("p: mark %s #%s as %s", args[1], strings.Join(ids, ",#"), state)
 				}
-				if err := service.Commit(dir, msg); err != nil {
+				if err := service.Commit(cmd.Context(), dir, msg); err != nil {
 					return fmt.Errorf("committing: %w", err)
 				}
 				return nil
@@ -46,10 +46,10 @@ var priorityCmd = &cobra.Command{
 			return err
 		}
 		return withProjectLock(args[0], func(dir string) error {
-			if err := service.SetItemPriority(dir, args[1], args[2], todo.Priority(args[3])); err != nil {
+			if err := service.SetItemPriority(cmd.Context(), dir, args[1], args[2], todo.Priority(args[3])); err != nil {
 				return err
 			}
-			if err := service.Commit(dir, fmt.Sprintf("p: set %s #%s priority to %s", args[1], args[2], args[3])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: set %s #%s priority to %s", args[1], args[2], args[3])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 			fmt.Printf("Set %s #%s priority to %s\n", args[1], args[2], args[3])
@@ -67,10 +67,10 @@ var dueCmd = &cobra.Command{
 			return err
 		}
 		return withProjectLock(args[0], func(dir string) error {
-			if err := service.SetItemDue(dir, args[1], args[2], args[3]); err != nil {
+			if err := service.SetItemDue(cmd.Context(), dir, args[1], args[2], args[3]); err != nil {
 				return err
 			}
-			if err := service.Commit(dir, fmt.Sprintf("p: set %s #%s due date to %s", args[1], args[2], args[3])); err != nil {
+			if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: set %s #%s due date to %s", args[1], args[2], args[3])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 			fmt.Printf("Set %s #%s due date to %s\n", args[1], args[2], args[3])

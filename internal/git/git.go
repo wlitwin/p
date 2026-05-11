@@ -1,6 +1,10 @@
+// Package git provides helpers for managing git repositories used as
+// project storage backends. All public functions accept a context.Context
+// to support cancellation and deadline propagation.
 package git
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,13 +12,14 @@ import (
 	"strings"
 )
 
-func Init(dir string) error {
+// Init initialises a new git repository in dir if one does not already exist.
+func Init(ctx context.Context, dir string) error {
 	gitDir := filepath.Join(dir, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
 		ensureGitignore(dir)
 		return nil
 	}
-	if err := run(dir, "init"); err != nil {
+	if err := run(ctx, dir, "init"); err != nil {
 		return err
 	}
 	ensureGitignore(dir)
@@ -39,12 +44,14 @@ func ensureGitignore(dir string) {
 	_ = os.WriteFile(path, []byte(entry+"\n"), 0o644)
 }
 
-func CommitAll(dir, message string) error {
-	if err := run(dir, "add", "-A"); err != nil {
+// CommitAll stages all changes and creates a commit with the given message.
+// If there are no changes to commit, it returns nil without creating a commit.
+func CommitAll(ctx context.Context, dir, message string) error {
+	if err := run(ctx, dir, "add", "-A"); err != nil {
 		return err
 	}
 
-	out, err := output(dir, "status", "--porcelain")
+	out, err := output(ctx, dir, "status", "--porcelain")
 	if err != nil {
 		return err
 	}
@@ -52,40 +59,43 @@ func CommitAll(dir, message string) error {
 		return nil
 	}
 
-	return run(dir, "commit", "-m", message)
+	return run(ctx, dir, "commit", "-m", message)
 }
 
-func Diff(dir string) (string, error) {
+// Diff stages all changes and returns the unified diff of staged content.
+func Diff(ctx context.Context, dir string) (string, error) {
 	// Stage everything first so we can show a unified diff
-	if err := run(dir, "add", "-A"); err != nil {
+	if err := run(ctx, dir, "add", "-A"); err != nil {
 		return "", err
 	}
-	staged, err := output(dir, "diff", "--cached")
+	staged, err := output(ctx, dir, "diff", "--cached")
 	if err != nil {
 		// If no HEAD yet (first commit scenario), diff against empty tree
-		staged, err = output(dir, "diff", "--cached", "--diff-filter=A")
+		staged, err = output(ctx, dir, "diff", "--cached", "--diff-filter=A")
 		if err != nil {
 			return "", err
 		}
 	}
 	// Unstage so the user can still choose to revert
-	_ = runQuiet(dir, "reset", "HEAD")
+	_ = runQuiet(ctx, dir, "reset", "HEAD")
 	return staged, nil
 }
 
-func DiffStat(dir string) (string, error) {
-	return output(dir, "diff", "--stat", "HEAD")
+// DiffStat returns a summary of changes relative to HEAD.
+func DiffStat(ctx context.Context, dir string) (string, error) {
+	return output(ctx, dir, "diff", "--stat", "HEAD")
 }
 
-func RevertChanges(dir string) error {
-	if err := run(dir, "checkout", "."); err != nil {
+// RevertChanges discards all uncommitted changes in the working tree.
+func RevertChanges(ctx context.Context, dir string) error {
+	if err := run(ctx, dir, "checkout", "."); err != nil {
 		return err
 	}
-	return run(dir, "clean", "-fd")
+	return run(ctx, dir, "clean", "-fd")
 }
 
-func run(dir string, args ...string) error {
-	cmd := exec.Command("git", args...)
+func run(ctx context.Context, dir string, args ...string) error {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
@@ -95,8 +105,8 @@ func run(dir string, args ...string) error {
 	return nil
 }
 
-func runQuiet(dir string, args ...string) error {
-	cmd := exec.Command("git", args...)
+func runQuiet(ctx context.Context, dir string, args ...string) error {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git %v: %w", args, err)
@@ -104,8 +114,8 @@ func runQuiet(dir string, args ...string) error {
 	return nil
 }
 
-func output(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+func output(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {

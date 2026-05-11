@@ -32,7 +32,7 @@ Examples:
 				return err
 			}
 
-			if err := git.CommitAll(dir, fmt.Sprintf("p: update description for %s", args[0])); err != nil {
+			if err := git.CommitAll(cmd.Context(), dir, fmt.Sprintf("p: update description for %s", args[0])); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 

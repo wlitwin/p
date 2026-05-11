@@ -27,7 +27,7 @@ Examples:
 		}
 
 		return withProjectLock(args[0], func(dir string) error {
-			if err := git.CommitAll(dir, msg); err != nil {
+			if err := git.CommitAll(cmd.Context(), dir, msg); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 			fmt.Println("Saved.")

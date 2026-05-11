@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -745,7 +746,7 @@ func TestIntegrationLogAfterMutations(t *testing.T) {
 	dir := filepath.Join(root, "log-proj")
 
 	// Init git and configure user
-	if err := git.Init(dir); err != nil {
+	if err := git.Init(context.Background(), dir); err != nil {
 		t.Fatalf("git.Init: %v", err)
 	}
 	configureGitUser(t, dir)
@@ -757,7 +758,7 @@ func TestIntegrationLogAfterMutations(t *testing.T) {
 	}
 	todo.AddItem(list, "First task", todo.Now, "")
 	todo.SaveList(dir, "tasks", list)
-	if err := git.CommitAll(dir, "Add first task"); err != nil {
+	if err := git.CommitAll(context.Background(), dir, "Add first task"); err != nil {
 		t.Fatalf("CommitAll 1: %v", err)
 	}
 
@@ -765,7 +766,7 @@ func TestIntegrationLogAfterMutations(t *testing.T) {
 	list, _ = todo.LoadList(dir, "tasks")
 	todo.AddItem(list, "Second task", todo.Backlog, "")
 	todo.SaveList(dir, "tasks", list)
-	if err := git.CommitAll(dir, "Add second task"); err != nil {
+	if err := git.CommitAll(context.Background(), dir, "Add second task"); err != nil {
 		t.Fatalf("CommitAll 2: %v", err)
 	}
 
@@ -797,7 +798,7 @@ func TestIntegrationDiffUncommitted(t *testing.T) {
 	dir := filepath.Join(root, "diff-proj")
 
 	// Init git and configure user
-	if err := git.Init(dir); err != nil {
+	if err := git.Init(context.Background(), dir); err != nil {
 		t.Fatalf("git.Init: %v", err)
 	}
 	configureGitUser(t, dir)
@@ -809,7 +810,7 @@ func TestIntegrationDiffUncommitted(t *testing.T) {
 	}
 	todo.AddItem(list, "Initial item", todo.Now, "")
 	todo.SaveList(dir, "tasks", list)
-	if err := git.CommitAll(dir, "Initial commit"); err != nil {
+	if err := git.CommitAll(context.Background(), dir, "Initial commit"); err != nil {
 		t.Fatalf("CommitAll: %v", err)
 	}
 
@@ -819,7 +820,7 @@ func TestIntegrationDiffUncommitted(t *testing.T) {
 	todo.SaveList(dir, "tasks", list)
 
 	// git.Diff should return non-empty diff containing the new item text
-	diff, err := git.Diff(dir)
+	diff, err := git.Diff(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("git.Diff: %v", err)
 	}
@@ -831,7 +832,7 @@ func TestIntegrationDiffUncommitted(t *testing.T) {
 	}
 
 	// git.DiffStat should return non-empty stat output
-	stat, err := git.DiffStat(dir)
+	stat, err := git.DiffStat(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("git.DiffStat: %v", err)
 	}
@@ -840,10 +841,10 @@ func TestIntegrationDiffUncommitted(t *testing.T) {
 	}
 
 	// Commit and verify Diff returns empty (clean)
-	if err := git.CommitAll(dir, "Commit uncommitted item"); err != nil {
+	if err := git.CommitAll(context.Background(), dir, "Commit uncommitted item"); err != nil {
 		t.Fatalf("CommitAll after modify: %v", err)
 	}
-	diff, err = git.Diff(dir)
+	diff, err = git.Diff(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("git.Diff after commit: %v", err)
 	}
@@ -858,7 +859,7 @@ func TestIntegrationDiffClean(t *testing.T) {
 	dir := filepath.Join(root, "clean-proj")
 
 	// Init git and configure user
-	if err := git.Init(dir); err != nil {
+	if err := git.Init(context.Background(), dir); err != nil {
 		t.Fatalf("git.Init: %v", err)
 	}
 	configureGitUser(t, dir)
@@ -870,12 +871,12 @@ func TestIntegrationDiffClean(t *testing.T) {
 	}
 	todo.AddItem(list, "Committed item", todo.Now, "")
 	todo.SaveList(dir, "tasks", list)
-	if err := git.CommitAll(dir, "Initial commit"); err != nil {
+	if err := git.CommitAll(context.Background(), dir, "Initial commit"); err != nil {
 		t.Fatalf("CommitAll: %v", err)
 	}
 
 	// DiffStat should return empty on clean working tree
-	stat, err := git.DiffStat(dir)
+	stat, err := git.DiffStat(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("git.DiffStat: %v", err)
 	}
@@ -1004,7 +1005,7 @@ func TestIntegrationServiceSetListContext(t *testing.T) {
 	todo.SaveList(dir, "tasks", list)
 
 	// Use service to set context
-	if err := service.SetListContext(dir, "tasks", []string{"docs/*", "design"}); err != nil {
+	if err := service.SetListContext(context.Background(), dir, "tasks", []string{"docs/*", "design"}); err != nil {
 		t.Fatalf("SetListContext: %v", err)
 	}
 
@@ -1014,7 +1015,7 @@ func TestIntegrationServiceSetListContext(t *testing.T) {
 	}
 
 	// Use service to clear context
-	if err := service.SetListContext(dir, "tasks", nil); err != nil {
+	if err := service.SetListContext(context.Background(), dir, "tasks", nil); err != nil {
 		t.Fatalf("SetListContext(nil): %v", err)
 	}
 
@@ -1029,7 +1030,7 @@ func TestIntegrationServiceSetDefaultContext(t *testing.T) {
 	project.Create(root, "svc-proj", "")
 	dir := filepath.Join(root, "svc-proj")
 
-	if err := service.SetDefaultContext(dir, []string{"overview", "arch/*"}); err != nil {
+	if err := service.SetDefaultContext(context.Background(), dir, []string{"overview", "arch/*"}); err != nil {
 		t.Fatalf("SetDefaultContext: %v", err)
 	}
 
@@ -1038,7 +1039,7 @@ func TestIntegrationServiceSetDefaultContext(t *testing.T) {
 		t.Fatalf("expected 2 patterns, got %d", len(meta.DefaultContext))
 	}
 
-	if err := service.SetDefaultContext(dir, nil); err != nil {
+	if err := service.SetDefaultContext(context.Background(), dir, nil); err != nil {
 		t.Fatalf("SetDefaultContext(nil): %v", err)
 	}
 

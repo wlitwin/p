@@ -102,7 +102,7 @@ Use --ai to have the AI agent decide placement and wording.`,
 				return err
 			}
 
-			diff, err := git.Diff(dir)
+			diff, err := git.Diff(cmd.Context(), dir)
 			if err != nil {
 				return fmt.Errorf("getting diff: %w", err)
 			}
@@ -115,7 +115,7 @@ Use --ai to have the AI agent decide placement and wording.`,
 			fmt.Fprintf(os.Stderr, "\n--- Changes ---\n%s\n", diff)
 
 			commitMsg := fmt.Sprintf("p: AI added %s content from: %s", mode, display.Truncate(text, 60))
-			if err := git.CommitAll(dir, commitMsg); err != nil {
+			if err := git.CommitAll(cmd.Context(), dir, commitMsg); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
 
@@ -145,11 +145,11 @@ Use --ai to have the AI agent decide placement and wording.`,
 		}
 		dueDate, _ := cmd.Flags().GetString("due")
 
-		if err := service.AddItem(dir, listName, text, todo.Priority(priority), dueDate, ""); err != nil {
+		if err := service.AddItem(cmd.Context(), dir, listName, text, todo.Priority(priority), dueDate, ""); err != nil {
 			return err
 		}
 
-		if err := service.Commit(dir, fmt.Sprintf("p: add todo %q to %s", text, listName)); err != nil {
+		if err := service.Commit(cmd.Context(), dir, fmt.Sprintf("p: add todo %q to %s", text, listName)); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
 

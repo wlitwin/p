@@ -92,7 +92,7 @@ func runAIWithCommit(ctx context.Context, taskCfg aiTaskConfig) error {
 		return err
 	}
 
-	diff, err := git.Diff(dir)
+	diff, err := git.Diff(ctx, dir)
 	if err != nil {
 		return fmt.Errorf("getting diff: %w", err)
 	}
@@ -104,7 +104,7 @@ func runAIWithCommit(ctx context.Context, taskCfg aiTaskConfig) error {
 
 	fmt.Fprintf(os.Stderr, "\n--- Changes ---\n%s\n", diff)
 
-	if err := git.CommitAll(dir, taskCfg.CommitMsg); err != nil {
+	if err := git.CommitAll(ctx, dir, taskCfg.CommitMsg); err != nil {
 		return fmt.Errorf("committing: %w", err)
 	}
 
