@@ -5,14 +5,38 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func Init(dir string) error {
 	gitDir := filepath.Join(dir, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
+		ensureGitignore(dir)
 		return nil
 	}
-	return run(dir, "init")
+	if err := run(dir, "init"); err != nil {
+		return err
+	}
+	ensureGitignore(dir)
+	return nil
+}
+
+func ensureGitignore(dir string) {
+	path := filepath.Join(dir, ".gitignore")
+	entry := ".p/lock"
+	data, err := os.ReadFile(path)
+	if err == nil {
+		s := string(data)
+		if strings.Contains(s, entry) {
+			return
+		}
+		if !strings.HasSuffix(s, "\n") {
+			s += "\n"
+		}
+		_ = os.WriteFile(path, []byte(s+entry+"\n"), 0o644)
+		return
+	}
+	_ = os.WriteFile(path, []byte(entry+"\n"), 0o644)
 }
 
 func CommitAll(dir, message string) error {

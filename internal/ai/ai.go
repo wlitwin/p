@@ -386,6 +386,7 @@ func todoInstructions(task Task) string {
 	sb.WriteString("- Set priority to 'now' unless it sounds like a future/low-priority idea.\n")
 	sb.WriteString("- If the input references related knowledge, add a [[wiki link]] in the todo text.\n")
 	sb.WriteString("- Do NOT modify existing todos unless the new item is clearly a sub-task of one.\n")
+	sb.WriteString("- If adding to a new list, consider using `todo_context` to set context patterns scoping which knowledge docs are relevant to that list.\n")
 
 	return sb.String()
 }
@@ -401,13 +402,14 @@ func planInstructions(task Task) string {
 	sb.WriteString("- Start by reading the current project state using `project_list`, `todo_list`, and `knowledge_read`.\n")
 	sb.WriteString("- You can create multiple todo items across multiple lists.\n")
 	sb.WriteString("- You can create new todo lists if the work spans different topics.\n")
-	sb.WriteString("- You can create or update knowledge docs to capture context, decisions, or plans.\n")
+	sb.WriteString("- You can create or update knowledge docs to capture context, decisions, or plans. Knowledge docs support subdirectories (e.g., `architecture/overview`, `decisions/db-migration`) for organization.\n")
 	sb.WriteString("- Group related todos into the same list. Use separate lists for distinct workstreams.\n")
 	sb.WriteString("- Word each todo as a clear, actionable task.\n")
 	sb.WriteString("- Set priority=backlog for nice-to-haves, priority=now for important items.\n")
 	sb.WriteString("- Use [[wiki links]] to connect todos to relevant knowledge docs.\n")
 	sb.WriteString("- If the task involves planning, consider creating a knowledge doc that captures the overall plan, then individual todos for execution.\n")
 	sb.WriteString("- Think step by step about what needs to happen and break it down into concrete tasks.\n")
+	sb.WriteString("- When creating a new todo list, use `todo_context` to set context patterns that scope which knowledge docs are relevant (e.g., `architecture/*`, `decisions/db-*`). This keeps AI prompts focused as the project grows.\n")
 
 	return sb.String()
 }
@@ -438,7 +440,7 @@ func knowledgeInstructions(task Task) string {
 	sb.WriteString("- If the input is a URL, fetch and summarize the content at that URL.\n")
 	sb.WriteString("- Decide where this information belongs in the knowledge base.\n")
 	sb.WriteString("- If an existing knowledge doc covers this topic, append to it (use `knowledge_append`).\n")
-	sb.WriteString("- If no existing doc fits, create a new one (use `knowledge_create` then `knowledge_append`).\n")
+	sb.WriteString("- If no existing doc fits, create a new one (use `knowledge_create` then `knowledge_append`). Use subdirectory paths for organization (e.g., `decisions/auth-provider`, `architecture/api`).\n")
 	sb.WriteString("- Write clear, concise markdown. Use headings, lists, and links as appropriate.\n")
 	sb.WriteString("- Use [[wiki links]] to cross-reference other knowledge docs.\n")
 	sb.WriteString("- Preserve existing content — append or update sections, don't overwrite unrelated content.\n")

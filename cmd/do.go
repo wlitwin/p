@@ -214,6 +214,7 @@ func buildDoPrompt(projectName, projectDir string, list *todo.List, listName str
 	sb.WriteString("- If you learn something important during implementation, use `knowledge_append` to document it.\n")
 	sb.WriteString("- If a task turns out to be more complex than expected, use `todo_add` to break it into sub-tasks.\n")
 	sb.WriteString("- Work through the items methodically. Commit your code changes as you go.\n")
+	sb.WriteString("- You can use `todo_context` to update which knowledge docs are relevant to this list, keeping future AI sessions focused.\n")
 
 	return sb.String()
 }
