@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/service"
@@ -15,21 +16,23 @@ func makeStateCmd(name string, state todo.State, short string) *cobra.Command {
 		Short: short,
 		Args:  cobra.MinimumNArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			for _, id := range args[2:] {
-				if err := withProjectLock(args[0], func(dir string) error {
+			return withProjectLock(args[0], func(dir string) error {
+				ids := args[2:]
+				for _, id := range ids {
 					if err := service.SetItemState(dir, args[1], id, state); err != nil {
 						return err
 					}
-					if err := service.Commit(dir, fmt.Sprintf("p: mark %s #%s as %s", args[1], id, state)); err != nil {
-						return fmt.Errorf("committing: %w", err)
-					}
 					fmt.Printf("Marked %s #%s as %s\n", args[1], id, state)
-					return nil
-				}); err != nil {
-					return err
 				}
-			}
-			return nil
+				msg := fmt.Sprintf("p: mark %s #%s as %s", args[1], ids[0], state)
+				if len(ids) > 1 {
+					msg = fmt.Sprintf("p: mark %s #%s as %s", args[1], strings.Join(ids, ",#"), state)
+				}
+				if err := service.Commit(dir, msg); err != nil {
+					return fmt.Errorf("committing: %w", err)
+				}
+				return nil
+			})
 		},
 	}
 }
