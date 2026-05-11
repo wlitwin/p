@@ -60,6 +60,6 @@ func setArchived(name string, archived bool) error {
 }
 
 func init() {
-	rootCmd.AddCommand(archiveCmd)
-	rootCmd.AddCommand(unarchiveCmd)
+	projectCmd.AddCommand(archiveCmd)
+	projectCmd.AddCommand(unarchiveCmd)
 }

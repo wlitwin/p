@@ -88,5 +88,5 @@ func removeTags(existing, toRemove []string) []string {
 
 func init() {
 	tagCmd.Flags().Bool("remove", false, "Remove the specified tags instead of adding")
-	rootCmd.AddCommand(tagCmd)
+	todoCmd.AddCommand(tagCmd)
 }

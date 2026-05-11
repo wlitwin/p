@@ -102,5 +102,5 @@ Examples:
 
 func init() {
 	reviewCmd.Flags().BoolP("yes", "y", false, "Auto-confirm AI changes without prompting")
-	rootCmd.AddCommand(reviewCmd)
+	aiCmd.AddCommand(reviewCmd)
 }

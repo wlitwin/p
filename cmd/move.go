@@ -71,5 +71,5 @@ var moveCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(moveCmd)
+	todoCmd.AddCommand(moveCmd)
 }

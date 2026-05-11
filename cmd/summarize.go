@@ -56,5 +56,5 @@ Example:
 }
 
 func init() {
-	rootCmd.AddCommand(summarizeCmd)
+	aiCmd.AddCommand(summarizeCmd)
 }

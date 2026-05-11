@@ -111,5 +111,5 @@ func allDone(items []*todo.Item) bool {
 
 func init() {
 	archiveListCmd.Flags().Bool("restore", false, "Restore an archived list")
-	rootCmd.AddCommand(archiveListCmd)
+	todoCmd.AddCommand(archiveListCmd)
 }

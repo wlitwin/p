@@ -45,5 +45,5 @@ var newCmd = &cobra.Command{
 
 func init() {
 	newCmd.Flags().String("description", "", "Project description")
-	rootCmd.AddCommand(newCmd)
+	projectCmd.AddCommand(newCmd)
 }

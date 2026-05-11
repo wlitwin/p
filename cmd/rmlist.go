@@ -55,5 +55,5 @@ var rmListCmd = &cobra.Command{
 
 func init() {
 	rmListCmd.Flags().BoolP("yes", "y", false, "Skip confirmation")
-	rootCmd.AddCommand(rmListCmd)
+	todoCmd.AddCommand(rmListCmd)
 }

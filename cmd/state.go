@@ -114,8 +114,8 @@ var dueCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(makeStateCmd("done", todo.Done, "Mark a todo item as done"))
-	rootCmd.AddCommand(makeStateCmd("block", todo.Blocked, "Mark a todo item as blocked"))
-	rootCmd.AddCommand(makeStateCmd("open", todo.Open, "Reopen a todo item"))
-	rootCmd.AddCommand(priorityCmd)
-	rootCmd.AddCommand(dueCmd)
+	todoCmd.AddCommand(makeStateCmd("block", todo.Blocked, "Mark a todo item as blocked"))
+	todoCmd.AddCommand(makeStateCmd("open", todo.Open, "Reopen a todo item"))
+	todoCmd.AddCommand(priorityCmd)
+	todoCmd.AddCommand(dueCmd)
 }

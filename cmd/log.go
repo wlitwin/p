@@ -38,5 +38,5 @@ var logCmd = &cobra.Command{
 
 func init() {
 	logCmd.Flags().IntP("count", "n", 20, "Number of commits to show")
-	rootCmd.AddCommand(logCmd)
+	projectCmd.AddCommand(logCmd)
 }

@@ -104,5 +104,5 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(setCmd)
+	projectCmd.AddCommand(setCmd)
 }

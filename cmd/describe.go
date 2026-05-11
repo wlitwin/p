@@ -47,5 +47,5 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(describeCmd)
+	projectCmd.AddCommand(describeCmd)
 }

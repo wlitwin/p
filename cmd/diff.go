@@ -89,6 +89,6 @@ var revertCmd = &cobra.Command{
 
 func init() {
 	revertCmd.Flags().BoolP("yes", "y", false, "Skip confirmation")
-	rootCmd.AddCommand(diffCmd)
-	rootCmd.AddCommand(revertCmd)
+	projectCmd.AddCommand(diffCmd)
+	projectCmd.AddCommand(revertCmd)
 }
