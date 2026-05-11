@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -249,8 +250,77 @@ What becomes easier or more difficult to do because of this change?`
 	}
 }
 
+var knowledgeArchiveCmd = &cobra.Command{
+	Use:   "archive <project> [filename]",
+	Short: "Archive a knowledge document",
+	Long: `Moves a knowledge doc to knowledge/.archive/. Use --restore to unarchive.
+If no filename is given, shows archived docs available to restore.
+
+Examples:
+  p knowledge archive serviceA old-decisions
+  p knowledge archive serviceA old-decisions --restore
+  p knowledge archive serviceA                           # list archived docs`,
+	Args: cobra.RangeArgs(1, 2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		restore, _ := cmd.Flags().GetBool("restore")
+
+		return withProjectLock(args[0], func(dir string) error {
+			archiveDir := filepath.Join(knowledge.Dir(dir), ".archive")
+
+			if len(args) == 1 {
+				// List archived docs
+				entries, err := os.ReadDir(archiveDir)
+				if err != nil {
+					fmt.Println("No archived knowledge docs.")
+					return nil
+				}
+				fmt.Println("Archived knowledge docs:")
+				for _, e := range entries {
+					if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+						fmt.Printf("  %s\n", strings.TrimSuffix(e.Name(), ".md"))
+					}
+				}
+				return nil
+			}
+
+			filename := args[1]
+			activePath := knowledge.FilePath(dir, filename)
+			archivedPath := filepath.Join(archiveDir, filename+".md")
+
+			if restore {
+				if _, err := os.Stat(archivedPath); err != nil {
+					return fmt.Errorf("archived doc %q not found", filename)
+				}
+				if err := os.Rename(archivedPath, activePath); err != nil {
+					return err
+				}
+				if err := git.CommitAll(dir, fmt.Sprintf("p: restore knowledge/%s from archive", filename)); err != nil {
+					return fmt.Errorf("committing: %w", err)
+				}
+				fmt.Printf("Restored knowledge/%s.md\n", filename)
+			} else {
+				if _, err := os.Stat(activePath); err != nil {
+					return fmt.Errorf("knowledge doc %q not found", filename)
+				}
+				if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+					return err
+				}
+				if err := os.Rename(activePath, archivedPath); err != nil {
+					return err
+				}
+				if err := git.CommitAll(dir, fmt.Sprintf("p: archive knowledge/%s", filename)); err != nil {
+					return fmt.Errorf("committing: %w", err)
+				}
+				fmt.Printf("Archived knowledge/%s.md\n", filename)
+			}
+			return nil
+		})
+	},
+}
+
 func init() {
 	knowledgeDeleteCmd.Flags().BoolP("yes", "y", false, "Skip confirmation")
+	knowledgeArchiveCmd.Flags().Bool("restore", false, "Restore an archived doc")
 	knowledgeListCmd.Flags().String("tag", "", "Filter by tag")
 	knowledgeCreateFromTemplateCmd.Flags().String("template", "", "Template: decision-record, meeting-notes, runbook")
 	knowledgeCreateFromTemplateCmd.Flags().String("tags", "", "Comma-separated tags")
@@ -259,5 +329,6 @@ func init() {
 	knowledgeCmd.AddCommand(knowledgeSearchCmd)
 	knowledgeCmd.AddCommand(knowledgeListCmd)
 	knowledgeCmd.AddCommand(knowledgeCreateFromTemplateCmd)
+	knowledgeCmd.AddCommand(knowledgeArchiveCmd)
 	rootCmd.AddCommand(knowledgeCmd)
 }
