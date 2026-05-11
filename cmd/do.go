@@ -142,11 +142,17 @@ Examples:
 			return fmt.Errorf("claude session failed: %w", err)
 		}
 
-		// After claude finishes, offer to update project state
-		fmt.Println()
-		ok, _ := tui.Confirm("Mark completed items as done and update knowledge?")
-		if ok {
-			return postDoUpdate(pBinary, claudePath, model, projectName, dir, listName)
+		// Check if there are uncommitted changes in the project dir
+		diff, _ := git.Diff(dir)
+		if diff != "" {
+			fmt.Fprintf(os.Stderr, "\nUncommitted project changes detected.\n")
+			ok, _ := tui.Confirm("Save project changes?")
+			if ok {
+				if err := git.CommitAll(dir, fmt.Sprintf("p: post-implementation update for %s", listName)); err != nil {
+					return fmt.Errorf("committing: %w", err)
+				}
+				fmt.Println("Project changes saved.")
+			}
 		}
 
 		return nil
@@ -198,42 +204,6 @@ func buildDoPrompt(projectName, projectDir string, list *todo.List, listName str
 	sb.WriteString("- Work through the items methodically. Commit your code changes as you go.\n")
 
 	return sb.String()
-}
-
-func postDoUpdate(pBinary, claudePath, model, projectName, projectDir, listName string) error {
-	task := ai.Task{
-		ProjectName: projectName,
-		ProjectDir:  projectDir,
-		Input: fmt.Sprintf(`Review the todo list "%s" and the recent git history in the code repo.
-Mark any items that were just implemented as done.
-Add a brief summary of what was implemented to the knowledge base.`, listName),
-		Mode: ai.ModePlan,
-	}
-
-	if err := ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
-		return err
-	}
-
-	diff, err := git.Diff(projectDir)
-	if err != nil {
-		return err
-	}
-
-	if diff == "" {
-		fmt.Println("No project updates needed.")
-		return nil
-	}
-
-	fmt.Fprintf(os.Stderr, "\n--- Project changes ---\n%s\n", diff)
-
-	ok, _ := tui.Confirm("Commit project updates?")
-	if ok {
-		return git.CommitAll(projectDir, fmt.Sprintf("p: post-implementation update for %s", listName))
-	}
-
-	_ = git.RevertChanges(projectDir)
-	fmt.Println("Changes reverted.")
-	return nil
 }
 
 var itemIDRe = regexp.MustCompile(`^\d+(\.\d+)*$`)
