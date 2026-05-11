@@ -745,3 +745,135 @@ func TestTodoResolveInvalidID(t *testing.T) {
 		t.Errorf("expected error for invalid item ID, got: %s", text)
 	}
 }
+
+// --- Asset tool tests ---
+
+func TestAssetAdd(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// Create a temp file to add as an asset
+	tmpFile := filepath.Join(t.TempDir(), "screenshot.png")
+	os.WriteFile(tmpFile, []byte("fake png data"), 0o644)
+
+	text := callTool(t, ctx, ctx.handleAssetAdd, map[string]any{
+		"project":     "test-project",
+		"source_path": tmpFile,
+	})
+
+	if !strings.Contains(text, "screenshot.png") {
+		t.Errorf("expected filename in output: %s", text)
+	}
+
+	// Verify the file was copied
+	dir := filepath.Join(root, "test-project")
+	data, err := os.ReadFile(filepath.Join(dir, "assets", "screenshot.png"))
+	if err != nil {
+		t.Fatalf("reading copied asset: %v", err)
+	}
+	if string(data) != "fake png data" {
+		t.Errorf("asset content mismatch: %q", string(data))
+	}
+}
+
+func TestAssetAddMissingParams(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleAssetAdd, map[string]any{
+		"project":     "",
+		"source_path": "",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty params, got: %s", text)
+	}
+}
+
+func TestAssetAddMissingSource(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleAssetAdd, map[string]any{
+		"project":     "test-project",
+		"source_path": "/nonexistent/file.png",
+	})
+	if !isErr {
+		t.Errorf("expected error for missing source: %s", text)
+	}
+}
+
+func TestAssetList(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// Empty assets dir
+	text := callTool(t, ctx, ctx.handleAssetList, map[string]any{
+		"project": "test-project",
+	})
+	if !strings.Contains(text, "No assets") {
+		t.Errorf("expected 'No assets' for empty dir: %s", text)
+	}
+
+	// Add an asset then list
+	dir := filepath.Join(root, "test-project")
+	os.WriteFile(filepath.Join(dir, "assets", "doc.pdf"), []byte("pdf content"), 0o644)
+
+	text = callTool(t, ctx, ctx.handleAssetList, map[string]any{
+		"project": "test-project",
+	})
+	if !strings.Contains(text, "doc.pdf") {
+		t.Errorf("expected 'doc.pdf' in list: %s", text)
+	}
+	if !strings.Contains(text, "bytes") {
+		t.Errorf("expected size in bytes: %s", text)
+	}
+}
+
+func TestAssetRemove(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// Add an asset first
+	dir := filepath.Join(root, "test-project")
+	os.WriteFile(filepath.Join(dir, "assets", "old.txt"), []byte("data"), 0o644)
+
+	text := callTool(t, ctx, ctx.handleAssetRemove, map[string]any{
+		"project":  "test-project",
+		"filename": "old.txt",
+	})
+
+	if !strings.Contains(text, "Removed") {
+		t.Errorf("expected 'Removed' in output: %s", text)
+	}
+
+	// Verify file is gone
+	if _, err := os.Stat(filepath.Join(dir, "assets", "old.txt")); !os.IsNotExist(err) {
+		t.Error("expected asset to be deleted")
+	}
+}
+
+func TestAssetRemoveNotFound(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleAssetRemove, map[string]any{
+		"project":  "test-project",
+		"filename": "nonexistent.txt",
+	})
+	if !isErr {
+		t.Errorf("expected error for missing asset: %s", text)
+	}
+}
+
+func TestAssetRemoveMissingParams(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	text, isErr := callToolAllowError(t, ctx, ctx.handleAssetRemove, map[string]any{
+		"project":  "",
+		"filename": "",
+	})
+	if !isErr {
+		t.Errorf("expected error for empty params, got: %s", text)
+	}
+}

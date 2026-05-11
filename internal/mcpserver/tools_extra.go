@@ -92,6 +92,29 @@ func knowledgeSearchTool() mcp.Tool {
 	)
 }
 
+func assetAddTool() mcp.Tool {
+	return mcp.NewTool("asset_add",
+		mcp.WithDescription("Add a file to the project's assets directory. Copies the file from the given source path."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+		mcp.WithString("source_path", mcp.Description("Absolute path to the file to add"), mcp.Required()),
+	)
+}
+
+func assetListTool() mcp.Tool {
+	return mcp.NewTool("asset_list",
+		mcp.WithDescription("List all assets in a project with file sizes."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+	)
+}
+
+func assetRemoveTool() mcp.Tool {
+	return mcp.NewTool("asset_remove",
+		mcp.WithDescription("Remove an asset from a project."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+		mcp.WithString("filename", mcp.Description("Asset filename to remove"), mcp.Required()),
+	)
+}
+
 // --- Handlers ---
 
 func (s *serverCtx) handleProjectCreate(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -370,4 +393,72 @@ func (s *serverCtx) handleKnowledgeSearch(_ context.Context, req mcp.CallToolReq
 		fmt.Fprintf(&sb, "%s.md: matches\n", f)
 	}
 	return textResult(sb.String()), nil
+}
+
+func (s *serverCtx) handleAssetAdd(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	proj := req.GetString("project", "")
+	srcPath := req.GetString("source_path", "")
+
+	if proj == "" || srcPath == "" {
+		return errResult("project and source_path are required")
+	}
+
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	filename, err := service.AssetAdd(dir, srcPath)
+	if err != nil {
+		return errResult("%v", err)
+	}
+
+	return textResult(fmt.Sprintf("Added assets/%s", filename)), nil
+}
+
+func (s *serverCtx) handleAssetList(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	proj := req.GetString("project", "")
+	if proj == "" {
+		return errResult("project is required")
+	}
+
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	infos, err := service.AssetList(dir)
+	if err != nil {
+		return errResult("%v", err)
+	}
+
+	if len(infos) == 0 {
+		return textResult("No assets."), nil
+	}
+
+	var sb strings.Builder
+	for _, info := range infos {
+		fmt.Fprintf(&sb, "%s (%d bytes)\n", info.Name, info.Size)
+	}
+	return textResult(sb.String()), nil
+}
+
+func (s *serverCtx) handleAssetRemove(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	proj := req.GetString("project", "")
+	filename := req.GetString("filename", "")
+
+	if proj == "" || filename == "" {
+		return errResult("project and filename are required")
+	}
+
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	if err := service.AssetDelete(dir, filename); err != nil {
+		return errResult("%v", err)
+	}
+
+	return textResult(fmt.Sprintf("Removed assets/%s", filename)), nil
 }

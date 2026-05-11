@@ -48,6 +48,11 @@ func NewServer(projectRoot string) *server.MCPServer {
 	s.AddTool(todoRmListTool(), ctx.locked(ctx.handleTodoRmList))
 	s.AddTool(todoContextTool(), ctx.locked(ctx.handleTodoContext))
 
+	// Asset mutation tools
+	s.AddTool(assetAddTool(), ctx.locked(ctx.handleAssetAdd))
+	s.AddTool(assetListTool(), ctx.handleAssetList)
+	s.AddTool(assetRemoveTool(), ctx.locked(ctx.handleAssetRemove))
+
 	// Knowledge mutation tools
 	s.AddTool(knowledgeCreateTool(), ctx.locked(ctx.handleKnowledgeCreate))
 	s.AddTool(knowledgeAppendTool(), ctx.locked(ctx.handleKnowledgeAppend))

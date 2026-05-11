@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/walter/p/internal/asset"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
@@ -415,6 +416,21 @@ func SetDefaultContext(dir string, patterns []string) error {
 
 	meta.DefaultContext = patterns
 	return project.SaveMeta(dir, meta)
+}
+
+// AssetAdd copies a file into the project's assets directory.
+func AssetAdd(dir, srcPath string) (string, error) {
+	return asset.Copy(dir, srcPath)
+}
+
+// AssetList returns the names of all assets in a project.
+func AssetList(dir string) ([]asset.Info, error) {
+	return asset.ListWithInfo(dir)
+}
+
+// AssetDelete removes an asset from a project.
+func AssetDelete(dir, filename string) error {
+	return asset.Delete(dir, filename)
 }
 
 // Commit is a convenience wrapper around git.CommitAll for callers (like the
