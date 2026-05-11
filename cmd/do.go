@@ -14,7 +14,6 @@ import (
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
-	"github.com/walter/p/internal/tui"
 )
 
 var doCmd = &cobra.Command{
@@ -142,17 +141,9 @@ Examples:
 			return fmt.Errorf("claude session failed: %w", err)
 		}
 
-		// Check if there are uncommitted changes in the project dir
-		diff, _ := git.Diff(dir)
-		if diff != "" {
-			fmt.Fprintf(os.Stderr, "\nUncommitted project changes detected.\n")
-			ok, _ := tui.Confirm("Save project changes?")
-			if ok {
-				if err := git.CommitAll(dir, fmt.Sprintf("p: post-implementation update for %s", listName)); err != nil {
-					return fmt.Errorf("committing: %w", err)
-				}
-				fmt.Println("Project changes saved.")
-			}
+		// Auto-commit any project changes made during the session
+		if err := git.CommitAll(dir, fmt.Sprintf("p: post-implementation update for %s", listName)); err != nil {
+			return fmt.Errorf("committing: %w", err)
 		}
 
 		return nil
