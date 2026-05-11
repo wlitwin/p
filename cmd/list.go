@@ -30,7 +30,7 @@ var listCmd = &cobra.Command{
 		case 1:
 			return listTodoLists(args[0])
 		case 2:
-			if args[1] == "*" {
+			if args[1] == "all" || args[1] == "*" {
 				return listAllItems(args[0], cmd)
 			}
 			return listItems(args[0], args[1], cmd)
