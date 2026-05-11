@@ -46,7 +46,6 @@ var showCmd = &cobra.Command{
 
 		md := todo.Render(list)
 		return renderShow(md)
-		return nil
 	},
 }
 
