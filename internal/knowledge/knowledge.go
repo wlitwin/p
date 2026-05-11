@@ -21,20 +21,30 @@ func FilePath(projectDir, filename string) string {
 
 func ListFiles(projectDir string) ([]string, error) {
 	dir := Dir(projectDir)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil, nil
 	}
 
 	var names []string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		names = append(names, strings.TrimSuffix(e.Name(), ".md"))
+		if d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		names = append(names, strings.TrimSuffix(rel, ".md"))
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return names, nil
 }
@@ -43,6 +53,13 @@ func Create(projectDir, filename, title string, tags []string) error {
 	path := FilePath(projectDir, filename)
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("knowledge file %q already exists", filename)
+	}
+
+	// Create parent directories for nested filenames (e.g. "architecture/overview")
+	if dir := filepath.Dir(path); dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)

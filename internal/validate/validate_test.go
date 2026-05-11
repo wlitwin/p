@@ -78,13 +78,46 @@ func TestFilenameSentinels(t *testing.T) {
 	if !errors.Is(err, ErrEmpty) {
 		t.Errorf("expected ErrEmpty, got %v", err)
 	}
-	err = Filename(strings.Repeat("x", 65))
+	err = Filename(strings.Repeat("x", 129))
 	if !errors.Is(err, ErrTooLong) {
 		t.Errorf("expected ErrTooLong, got %v", err)
 	}
 	err = Filename("bad.name")
 	if !errors.Is(err, ErrInvalidChars) {
 		t.Errorf("expected ErrInvalidChars, got %v", err)
+	}
+}
+
+func TestFilenameSubdirectories(t *testing.T) {
+	valid := []string{
+		"overview",
+		"architecture/overview",
+		"architecture/database",
+		"decisions/db-migration",
+		"deep/nested/path/doc",
+	}
+	for _, name := range valid {
+		if err := Filename(name); err != nil {
+			t.Errorf("Filename(%q) should be valid: %v", name, err)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"../escape",
+		"dir/../escape",
+		"dir/./same",
+		"/absolute",
+		"dir//double",
+		"dir/",
+		"dir/.hidden",
+		"has space/file",
+		"dir/has.dot",
+	}
+	for _, name := range invalid {
+		if err := Filename(name); err == nil {
+			t.Errorf("Filename(%q) should be invalid", name)
+		}
 	}
 }
 

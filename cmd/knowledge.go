@@ -148,7 +148,11 @@ var knowledgeListCmd = &cobra.Command{
 			if len(tags) > 0 {
 				tagStr = " [" + strings.Join(tags, ", ") + "]"
 			}
-			fmt.Printf("  %-20s  %s%s\n", f, size, tagStr)
+			width := 20
+			if len(f) > width {
+				width = len(f) + 2
+			}
+			fmt.Printf("  %-*s  %s%s\n", width, f, size, tagStr)
 		}
 		return nil
 	},

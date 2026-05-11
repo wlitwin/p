@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,9 @@ var (
 )
 
 var nameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
+
+// filenameRe allows subdirectory paths: each segment must match nameRe rules.
+var filenameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*(/[a-zA-Z0-9][a-zA-Z0-9_-]*)*$`)
 
 // ProjectName validates a project name. It must be non-empty, at most 64
 // characters, and contain only letters, numbers, hyphens, and underscores.
@@ -62,16 +66,22 @@ func ListName(name string) error {
 	return nil
 }
 
-// Filename validates a knowledge document filename. Same rules as ProjectName.
+// Filename validates a knowledge document filename. Allows subdirectory paths
+// with / separators (e.g. "architecture/overview") but rejects ".." for path
+// traversal prevention. Each path segment must start with a letter or digit
+// and contain only letters, digits, hyphens, and underscores.
 func Filename(name string) error {
 	if name == "" {
 		return fmt.Errorf("filename cannot be empty: %w", ErrEmpty)
 	}
-	if len(name) > 64 {
-		return fmt.Errorf("filename too long (max 64 characters): %w", ErrTooLong)
+	if len(name) > 128 {
+		return fmt.Errorf("filename too long (max 128 characters): %w", ErrTooLong)
 	}
-	if !nameRe.MatchString(name) {
-		return fmt.Errorf("filename %q contains invalid characters — use letters, numbers, hyphens, underscores: %w", name, ErrInvalidChars)
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("filename %q contains '..': %w", name, ErrInvalidChars)
+	}
+	if !filenameRe.MatchString(name) {
+		return fmt.Errorf("filename %q contains invalid characters — use letters, numbers, hyphens, underscores, and / for subdirectories: %w", name, ErrInvalidChars)
 	}
 	return nil
 }

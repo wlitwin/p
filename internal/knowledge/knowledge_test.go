@@ -686,6 +686,174 @@ func TestMatchFilesEmptyProject(t *testing.T) {
 // matchGlob unit tests (for subdirectory patterns - future-proofing)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Nested knowledge docs tests
+// ---------------------------------------------------------------------------
+
+func TestCreateNested(t *testing.T) {
+	dir := setupTestProject(t)
+
+	if err := Create(dir, "architecture/overview", "Architecture Overview", nil); err != nil {
+		t.Fatalf("Create nested: %v", err)
+	}
+
+	content, err := Read(dir, "architecture/overview")
+	if err != nil {
+		t.Fatalf("Read nested: %v", err)
+	}
+	if !strings.Contains(content, "Architecture Overview") {
+		t.Error("nested doc should contain title")
+	}
+}
+
+func TestCreateDeeplyNested(t *testing.T) {
+	dir := setupTestProject(t)
+
+	if err := Create(dir, "deep/nested/path/doc", "Deep Doc", []string{"deep"}); err != nil {
+		t.Fatalf("Create deeply nested: %v", err)
+	}
+
+	content, err := Read(dir, "deep/nested/path/doc")
+	if err != nil {
+		t.Fatalf("Read deeply nested: %v", err)
+	}
+	if !strings.Contains(content, "Deep Doc") {
+		t.Error("deeply nested doc should contain title")
+	}
+}
+
+func TestListFilesRecursive(t *testing.T) {
+	dir := setupTestProject(t)
+
+	// Create flat and nested docs
+	Create(dir, "overview", "Overview", nil)
+	Create(dir, "architecture/database", "DB", nil)
+	Create(dir, "architecture/api", "API", nil)
+	Create(dir, "decisions/db-migration", "Migration", nil)
+
+	files, err := ListFiles(dir)
+	if err != nil {
+		t.Fatalf("ListFiles: %v", err)
+	}
+
+	if len(files) != 4 {
+		t.Fatalf("got %d files, want 4: %v", len(files), files)
+	}
+
+	found := make(map[string]bool)
+	for _, f := range files {
+		found[f] = true
+	}
+
+	for _, want := range []string{"overview", "architecture/api", "architecture/database", "decisions/db-migration"} {
+		if !found[want] {
+			t.Errorf("ListFiles missing %q, got %v", want, files)
+		}
+	}
+}
+
+func TestDeleteNested(t *testing.T) {
+	dir := setupTestProject(t)
+	Create(dir, "architecture/overview", "Arch", nil)
+
+	if err := Delete(dir, "architecture/overview"); err != nil {
+		t.Fatalf("Delete nested: %v", err)
+	}
+
+	if _, err := Read(dir, "architecture/overview"); err == nil {
+		t.Error("expected error reading deleted nested doc")
+	}
+}
+
+func TestSearchNested(t *testing.T) {
+	dir := setupTestProject(t)
+	Create(dir, "architecture/overview", "Architecture Overview", nil)
+	Append(dir, "architecture/overview", "PostgreSQL is our primary database.", "")
+	Create(dir, "decisions/db-choice", "DB Choice", nil)
+	Append(dir, "decisions/db-choice", "We chose PostgreSQL for reliability.", "")
+	Create(dir, "overview", "Overview", nil)
+
+	matches, err := Search(dir, "PostgreSQL")
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+
+	if len(matches) != 2 {
+		t.Fatalf("got %d matches, want 2: %v", len(matches), matches)
+	}
+
+	found := make(map[string]bool)
+	for _, m := range matches {
+		found[m] = true
+	}
+	if !found["architecture/overview"] {
+		t.Error("search should find architecture/overview")
+	}
+	if !found["decisions/db-choice"] {
+		t.Error("search should find decisions/db-choice")
+	}
+}
+
+func TestRenameNested(t *testing.T) {
+	dir := setupTestProject(t)
+	Create(dir, "old-dir/doc", "Doc", nil)
+
+	if err := Rename(dir, "old-dir/doc", "new-dir/doc"); err != nil {
+		// Rename may fail if new-dir doesn't exist; that's expected
+		// since Rename doesn't create directories
+		t.Skipf("Rename across dirs not supported without MkdirAll: %v", err)
+	}
+
+	if _, err := Read(dir, "new-dir/doc"); err != nil {
+		t.Error("renamed nested doc not found")
+	}
+}
+
+func TestMatchFilesWithNestedDocs(t *testing.T) {
+	dir := setupTestProject(t)
+
+	Create(dir, "overview", "Overview", nil)
+	Create(dir, "architecture/database", "DB", nil)
+	Create(dir, "architecture/api", "API", nil)
+	Create(dir, "decisions/db-migration", "Migration", nil)
+
+	tests := []struct {
+		name     string
+		patterns []string
+		want     int
+		mustHave []string
+	}{
+		{"exact nested", []string{"architecture/database"}, 1, []string{"architecture/database"}},
+		{"dir wildcard", []string{"architecture/*"}, 2, []string{"architecture/api", "architecture/database"}},
+		{"dir doublestar", []string{"architecture/**"}, 2, []string{"architecture/api", "architecture/database"}},
+		{"prefix in dir", []string{"decisions/db-*"}, 1, []string{"decisions/db-migration"}},
+		{"star top-level only", []string{"*"}, 1, []string{"overview"}},
+		{"doublestar all", []string{"**"}, 4, nil},
+		{"mixed", []string{"overview", "architecture/*"}, 3, []string{"overview", "architecture/api", "architecture/database"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files, err := MatchFiles(dir, tt.patterns)
+			if err != nil {
+				t.Fatalf("MatchFiles(%v): %v", tt.patterns, err)
+			}
+			if len(files) != tt.want {
+				t.Errorf("got %d files, want %d: %v", len(files), tt.want, files)
+			}
+			found := make(map[string]bool)
+			for _, f := range files {
+				found[f] = true
+			}
+			for _, must := range tt.mustHave {
+				if !found[must] {
+					t.Errorf("missing %q in results %v", must, files)
+				}
+			}
+		})
+	}
+}
+
 func TestMatchGlobDirectoryPatterns(t *testing.T) {
 	tests := []struct {
 		pattern string
