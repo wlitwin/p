@@ -31,6 +31,10 @@ func ListFiles(projectDir string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
+			// Skip hidden directories like .archive
+			if strings.HasPrefix(d.Name(), ".") && path != dir {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if !strings.HasSuffix(d.Name(), ".md") {

@@ -752,6 +752,33 @@ func TestListFilesRecursive(t *testing.T) {
 	}
 }
 
+func TestListFilesExcludesArchive(t *testing.T) {
+	dir := setupTestProject(t)
+
+	Create(dir, "overview", "Overview", nil)
+	Create(dir, "design", "Design", nil)
+
+	// Create an archived doc manually
+	archiveDir := filepath.Join(Dir(dir), ".archive")
+	os.MkdirAll(archiveDir, 0o755)
+	os.WriteFile(filepath.Join(archiveDir, "old-doc.md"), []byte("# Old"), 0o644)
+
+	files, err := ListFiles(dir)
+	if err != nil {
+		t.Fatalf("ListFiles: %v", err)
+	}
+
+	for _, f := range files {
+		if strings.Contains(f, "old-doc") || strings.Contains(f, ".archive") {
+			t.Errorf("ListFiles should exclude archived docs, found %q", f)
+		}
+	}
+
+	if len(files) != 2 {
+		t.Errorf("got %d files, want 2 (overview, design): %v", len(files), files)
+	}
+}
+
 func TestDeleteNested(t *testing.T) {
 	dir := setupTestProject(t)
 	Create(dir, "architecture/overview", "Arch", nil)

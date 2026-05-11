@@ -693,6 +693,31 @@ func TestProjectContextNilPatternsIncludesAll(t *testing.T) {
 	}
 }
 
+func TestProjectContextFilteredOutShowsCorrectMessage(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	// Create docs that won't match the pattern
+	for _, name := range []string{"overview", "architecture"} {
+		if err := knowledge.Create(dir, name, name, nil); err != nil {
+			t.Fatalf("creating knowledge doc %s: %v", name, err)
+		}
+	}
+
+	// Pattern that matches nothing
+	task := baseTask(dir)
+	task.ContextPatterns = []string{"nonexistent-*"}
+
+	ctx := projectContext(task)
+
+	// Should say "no docs matched" not "no docs exist"
+	if strings.Contains(ctx, "No knowledge docs exist") {
+		t.Error("should NOT say 'No knowledge docs exist yet' when docs exist but are filtered out")
+	}
+	if !strings.Contains(ctx, "No knowledge docs matched") {
+		t.Error("should say 'No knowledge docs matched the context patterns'")
+	}
+}
+
 func TestProjectContextEmptyPatternsNoKnowledge(t *testing.T) {
 	dir := setupProjectDir(t)
 

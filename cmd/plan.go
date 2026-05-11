@@ -29,23 +29,19 @@ Examples:
 		listName, _ := cmd.Flags().GetString("list")
 
 		// Resolve context patterns from the target list if specified
+		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
+		if err != nil {
+			return err
+		}
+
 		var contextPatterns []string
 		if listName != "" {
-			dir, err := project.Resolve(cfg.ProjectRoot, args[0])
-			if err != nil {
-				return err
-			}
 			list, err := todo.LoadList(dir, listName)
 			if err != nil {
 				return fmt.Errorf("loading list for context: %w", err)
 			}
 			contextPatterns = ai.ResolveContext(dir, list)
 		} else {
-			// No specific list — use project default context
-			dir, err := project.Resolve(cfg.ProjectRoot, args[0])
-			if err != nil {
-				return err
-			}
 			contextPatterns = ai.ResolveContext(dir, nil)
 		}
 

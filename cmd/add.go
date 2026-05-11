@@ -77,16 +77,16 @@ Use --ai to have the AI agent decide placement and wording.`,
 				model = "claude-opus-4-6"
 			}
 
-			// Resolve context patterns from the target list if known
-			var contextPatterns []string
+			// Resolve context patterns from the target list if known.
+			// ResolveContext handles the fallback chain internally:
+			// list.Context > project.DefaultContext > nil (all docs).
+			var listForContext *todo.List
 			if listName != "" {
-				if list, err := todo.LoadList(dir, listName); err == nil {
-					contextPatterns = ai.ResolveContext(dir, list)
+				if l, err := todo.LoadList(dir, listName); err == nil {
+					listForContext = l
 				}
 			}
-			if contextPatterns == nil {
-				contextPatterns = ai.ResolveContext(dir, nil)
-			}
+			contextPatterns := ai.ResolveContext(dir, listForContext)
 
 			task := ai.Task{
 				ProjectName:     projectName,

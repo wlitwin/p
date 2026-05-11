@@ -79,9 +79,11 @@ func parseFrontmatter(list *List, lines []string) {
 					i++
 					patterns = append(patterns, strings.TrimSpace(strings.TrimPrefix(lines[i], "- ")))
 				}
-				if len(patterns) > 0 {
-					list.Context = patterns
+				// "context:" with no items = empty list (no docs)
+				if patterns == nil {
+					patterns = []string{}
 				}
+				list.Context = patterns
 			} else if val == "[]" {
 				// Explicit empty list
 				list.Context = []string{}

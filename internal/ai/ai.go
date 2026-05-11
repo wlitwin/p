@@ -337,6 +337,8 @@ func projectContext(task Task) string {
 			}
 			fmt.Fprintf(&sb, "**%s.md**:\n```\n%s\n```\n\n", f, content)
 		}
+	} else if task.ContextPatterns != nil {
+		sb.WriteString("### Knowledge docs\n\nNo knowledge docs matched the context patterns.\n\n")
 	} else {
 		sb.WriteString("### Knowledge docs\n\nNo knowledge docs exist yet.\n\n")
 	}

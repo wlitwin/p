@@ -978,6 +978,29 @@ updated: 2026-05-11T01:00:00Z
 	}
 }
 
+func TestParseContextBareKeyNoItems(t *testing.T) {
+	input := `---
+title: Bare Context
+created: 2026-05-11T01:00:00Z
+updated: 2026-05-11T01:00:00Z
+context:
+---
+
+# Bare Context
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	// "context:" with no items should mean empty list (no docs), not nil
+	if list.Context == nil {
+		t.Fatal("Context should be non-nil (empty slice) for bare 'context:' key, got nil")
+	}
+	if len(list.Context) != 0 {
+		t.Errorf("Context len = %d, want 0", len(list.Context))
+	}
+}
+
 func TestRenderContextMultiLine(t *testing.T) {
 	list := &List{
 		Title:   "With Context",
