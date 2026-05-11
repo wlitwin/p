@@ -77,13 +77,25 @@ Use --ai to have the AI agent decide placement and wording.`,
 				model = "claude-opus-4-6"
 			}
 
+			// Resolve context patterns from the target list if known
+			var contextPatterns []string
+			if listName != "" {
+				if list, err := todo.LoadList(dir, listName); err == nil {
+					contextPatterns = ai.ResolveContext(dir, list)
+				}
+			}
+			if contextPatterns == nil {
+				contextPatterns = ai.ResolveContext(dir, nil)
+			}
+
 			task := ai.Task{
-				ProjectName: projectName,
-				ProjectDir:  dir,
-				Input:       text,
-				Mode:        mode,
-				CommandName: "add",
-				ListName:    listName,
+				ProjectName:     projectName,
+				ProjectDir:      dir,
+				Input:           text,
+				Mode:            mode,
+				CommandName:     "add",
+				ListName:        listName,
+				ContextPatterns: contextPatterns,
 			}
 
 			if err := ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {

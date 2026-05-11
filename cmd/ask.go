@@ -49,11 +49,12 @@ Examples:
 		}
 
 		task := ai.Task{
-			ProjectName: projectName,
-			ProjectDir:  dir,
-			Input:       question,
-			Mode:        ai.ModeAsk,
-			CommandName: "ask",
+			ProjectName:     projectName,
+			ProjectDir:      dir,
+			Input:           question,
+			Mode:            ai.ModeAsk,
+			CommandName:     "ask",
+			ContextPatterns: ai.ResolveContext(dir, nil),
 		}
 
 		cont, _ := cmd.Flags().GetBool("continue")

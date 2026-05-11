@@ -518,3 +518,197 @@ func TestBuildPromptNoCustomPrompt(t *testing.T) {
 		t.Error("prompt should NOT contain 'Custom instructions' when no prompt files exist")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ResolveContext tests
+// ---------------------------------------------------------------------------
+
+func TestResolveContextListContextSet(t *testing.T) {
+	dir := setupProjectDir(t)
+	list := &todo.List{
+		Title:   "Test",
+		Context: []string{"arch/*", "design"},
+	}
+
+	patterns := ResolveContext(dir, list)
+	if len(patterns) != 2 {
+		t.Fatalf("got %d patterns, want 2", len(patterns))
+	}
+	if patterns[0] != "arch/*" || patterns[1] != "design" {
+		t.Errorf("patterns = %v, want [arch/* design]", patterns)
+	}
+}
+
+func TestResolveContextListContextEmpty(t *testing.T) {
+	dir := setupProjectDir(t)
+	list := &todo.List{
+		Title:   "Test",
+		Context: []string{}, // explicit empty — means "no knowledge docs"
+	}
+
+	patterns := ResolveContext(dir, list)
+	if patterns == nil {
+		t.Fatal("expected non-nil (empty slice), got nil")
+	}
+	if len(patterns) != 0 {
+		t.Errorf("got %d patterns, want 0", len(patterns))
+	}
+}
+
+func TestResolveContextFallsBackToProjectDefault(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	// Set project default context
+	meta := project.ProjectMeta{
+		Name:           "test",
+		DefaultContext: []string{"overview", "api-*"},
+	}
+	if err := project.SaveMeta(dir, meta); err != nil {
+		t.Fatal(err)
+	}
+
+	// List has no context field (nil)
+	list := &todo.List{Title: "Test"}
+
+	patterns := ResolveContext(dir, list)
+	if len(patterns) != 2 {
+		t.Fatalf("got %d patterns, want 2", len(patterns))
+	}
+	if patterns[0] != "overview" || patterns[1] != "api-*" {
+		t.Errorf("patterns = %v, want [overview api-*]", patterns)
+	}
+}
+
+func TestResolveContextNilListUsesProjectDefault(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	meta := project.ProjectMeta{
+		Name:           "test",
+		DefaultContext: []string{"overview"},
+	}
+	if err := project.SaveMeta(dir, meta); err != nil {
+		t.Fatal(err)
+	}
+
+	patterns := ResolveContext(dir, nil)
+	if len(patterns) != 1 || patterns[0] != "overview" {
+		t.Errorf("patterns = %v, want [overview]", patterns)
+	}
+}
+
+func TestResolveContextNoContextAnywhere(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	// No project default, no list context
+	meta := project.ProjectMeta{Name: "test"}
+	if err := project.SaveMeta(dir, meta); err != nil {
+		t.Fatal(err)
+	}
+
+	patterns := ResolveContext(dir, &todo.List{Title: "Test"})
+	if patterns != nil {
+		t.Errorf("expected nil (include all), got %v", patterns)
+	}
+}
+
+func TestResolveContextListOverridesProjectDefault(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	meta := project.ProjectMeta{
+		Name:           "test",
+		DefaultContext: []string{"default-*"},
+	}
+	if err := project.SaveMeta(dir, meta); err != nil {
+		t.Fatal(err)
+	}
+
+	list := &todo.List{
+		Title:   "Test",
+		Context: []string{"specific-*"},
+	}
+
+	patterns := ResolveContext(dir, list)
+	if len(patterns) != 1 || patterns[0] != "specific-*" {
+		t.Errorf("patterns = %v, want [specific-*] (list should override project default)", patterns)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// projectContext filtering tests
+// ---------------------------------------------------------------------------
+
+func TestProjectContextFiltersKnowledge(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	// Create multiple knowledge docs
+	for _, name := range []string{"overview", "architecture", "api-design", "db-schema"} {
+		if err := knowledge.Create(dir, name, name, nil); err != nil {
+			t.Fatalf("creating knowledge doc %s: %v", name, err)
+		}
+	}
+
+	// Task with context patterns — only include "api-*" and "overview"
+	task := baseTask(dir)
+	task.ContextPatterns = []string{"api-*", "overview"}
+
+	ctx := projectContext(task)
+
+	if !strings.Contains(ctx, "api-design.md") {
+		t.Error("context should include api-design.md (matches api-*)")
+	}
+	if !strings.Contains(ctx, "overview.md") {
+		t.Error("context should include overview.md (exact match)")
+	}
+	if strings.Contains(ctx, "architecture.md") {
+		t.Error("context should NOT include architecture.md (not matched)")
+	}
+	if strings.Contains(ctx, "db-schema.md") {
+		t.Error("context should NOT include db-schema.md (not matched)")
+	}
+}
+
+func TestProjectContextNilPatternsIncludesAll(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	for _, name := range []string{"overview", "architecture", "api-design"} {
+		if err := knowledge.Create(dir, name, name, nil); err != nil {
+			t.Fatalf("creating knowledge doc %s: %v", name, err)
+		}
+	}
+
+	// Task with nil context patterns — include all
+	task := baseTask(dir)
+	task.ContextPatterns = nil
+
+	ctx := projectContext(task)
+
+	if !strings.Contains(ctx, "overview.md") {
+		t.Error("nil patterns: context should include overview.md")
+	}
+	if !strings.Contains(ctx, "architecture.md") {
+		t.Error("nil patterns: context should include architecture.md")
+	}
+	if !strings.Contains(ctx, "api-design.md") {
+		t.Error("nil patterns: context should include api-design.md")
+	}
+}
+
+func TestProjectContextEmptyPatternsNoKnowledge(t *testing.T) {
+	dir := setupProjectDir(t)
+
+	for _, name := range []string{"overview", "architecture"} {
+		if err := knowledge.Create(dir, name, name, nil); err != nil {
+			t.Fatalf("creating knowledge doc %s: %v", name, err)
+		}
+	}
+
+	// Task with empty context patterns (context: []) means "no knowledge docs"
+	task := baseTask(dir)
+	task.ContextPatterns = []string{}
+
+	ctx := projectContext(task)
+
+	if strings.Contains(ctx, "overview.md") || strings.Contains(ctx, "architecture.md") {
+		t.Error("empty context patterns should include no knowledge docs")
+	}
+}

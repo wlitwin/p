@@ -32,12 +32,13 @@ func init() {
 // aiTaskConfig holds the parameters for creating and running an AI task
 // that auto-commits its changes. Used by plan and review commands.
 type aiTaskConfig struct {
-	ProjectName string
-	Input       string
-	Mode        ai.Mode
-	CommandName string
-	CommitMsg   string
-	AlsoNames   []string // additional project names for multi-project context
+	ProjectName     string
+	Input           string
+	Mode            ai.Mode
+	CommandName     string
+	CommitMsg       string
+	AlsoNames       []string // additional project names for multi-project context
+	ContextPatterns []string // knowledge doc glob patterns; nil means include all
 }
 
 // runAIWithCommit resolves a project, runs an AI task, and commits any changes.
@@ -67,11 +68,12 @@ func runAIWithCommit(taskCfg aiTaskConfig) error {
 	}
 
 	task := ai.Task{
-		ProjectName: taskCfg.ProjectName,
-		ProjectDir:  dir,
-		Input:       taskCfg.Input,
-		Mode:        taskCfg.Mode,
-		CommandName: taskCfg.CommandName,
+		ProjectName:     taskCfg.ProjectName,
+		ProjectDir:      dir,
+		Input:           taskCfg.Input,
+		Mode:            taskCfg.Mode,
+		CommandName:     taskCfg.CommandName,
+		ContextPatterns: taskCfg.ContextPatterns,
 	}
 
 	// Resolve --also projects for multi-project context

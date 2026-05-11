@@ -178,9 +178,18 @@ func buildDoPrompt(projectName, projectDir string, list *todo.List, listName str
 		sb.WriteString(todo.Render(list))
 	}
 
-	// Add knowledge context
+	// Add knowledge context — filter by list's context patterns
 	sb.WriteString("\n## Project knowledge\n\n")
-	files, _ := knowledge.ListFiles(projectDir)
+	contextPatterns := ai.ResolveContext(projectDir, list)
+	var files []string
+	if contextPatterns != nil {
+		if len(contextPatterns) > 0 {
+			files, _ = knowledge.MatchFiles(projectDir, contextPatterns)
+		}
+		// else: empty slice means include no knowledge docs
+	} else {
+		files, _ = knowledge.ListFiles(projectDir)
+	}
 	for _, f := range files {
 		content, err := knowledge.Read(projectDir, f)
 		if err != nil {

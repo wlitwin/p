@@ -44,11 +44,12 @@ Example:
 		}
 
 		task := ai.Task{
-			ProjectName: projectName,
-			ProjectDir:  dir,
-			Input:       "Generate a comprehensive status summary for this project.",
-			Mode:        ai.ModeAsk,
-			CommandName: "summarize",
+			ProjectName:     projectName,
+			ProjectDir:      dir,
+			Input:           "Generate a comprehensive status summary for this project.",
+			Mode:            ai.ModeAsk,
+			CommandName:     "summarize",
+			ContextPatterns: ai.ResolveContext(dir, nil),
 		}
 
 		return ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()})

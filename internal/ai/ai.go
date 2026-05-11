@@ -16,14 +16,15 @@ import (
 )
 
 type Task struct {
-	ProjectName   string
-	ProjectDir    string
-	Input         string
-	Mode          Mode
-	CommandName   string   // CLI command name (e.g., "ask", "do", "review") for prompt file lookup
-	ListName      string   // hint for todo mode, may be empty
-	AlsoProjects  []string // additional project dirs for multi-project context
-	AlsoNames     []string // names corresponding to AlsoProjects
+	ProjectName     string
+	ProjectDir      string
+	Input           string
+	Mode            Mode
+	CommandName     string   // CLI command name (e.g., "ask", "do", "review") for prompt file lookup
+	ListName        string   // hint for todo mode, may be empty
+	AlsoProjects    []string // additional project dirs for multi-project context
+	AlsoNames       []string // names corresponding to AlsoProjects
+	ContextPatterns []string // knowledge doc glob patterns; nil means include all
 }
 
 type Mode string
@@ -284,6 +285,19 @@ func buildPrompt(task Task) string {
 	return sb.String()
 }
 
+// ResolveContext determines which knowledge doc patterns to use.
+// Priority: list.Context (if set) > project DefaultContext (if set) > nil (all docs).
+func ResolveContext(projectDir string, list *todo.List) []string {
+	if list != nil && list.Context != nil {
+		return list.Context
+	}
+	meta, err := project.LoadMeta(projectDir)
+	if err == nil && meta.DefaultContext != nil {
+		return meta.DefaultContext
+	}
+	return nil
+}
+
 func projectContext(task Task) string {
 	var sb strings.Builder
 
@@ -303,7 +317,17 @@ func projectContext(task Task) string {
 		sb.WriteString("### Todo lists\n\nNo todo lists exist yet.\n\n")
 	}
 
-	files, err := knowledge.ListFiles(task.ProjectDir)
+	// Filter knowledge docs by context patterns if set.
+	// nil = include all (no filtering), empty slice = include none, non-empty = filter by glob.
+	var files []string
+	if task.ContextPatterns != nil {
+		if len(task.ContextPatterns) > 0 {
+			files, err = knowledge.MatchFiles(task.ProjectDir, task.ContextPatterns)
+		}
+		// else: empty slice means include no knowledge docs
+	} else {
+		files, err = knowledge.ListFiles(task.ProjectDir)
+	}
 	if err == nil && len(files) > 0 {
 		sb.WriteString("### Knowledge docs\n\n")
 		for _, f := range files {
