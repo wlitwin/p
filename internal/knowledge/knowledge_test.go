@@ -854,6 +854,118 @@ func TestMatchFilesWithNestedDocs(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// FindReferencingLists tests
+// ---------------------------------------------------------------------------
+
+func TestFindReferencingListsExactMatch(t *testing.T) {
+	dir := setupTestProject(t)
+
+	// Create a todo list with context patterns
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+	os.WriteFile(filepath.Join(dir, "todos", "sprint-1.md"), []byte(`---
+title: Sprint 1
+created: 2026-05-11T01:00:00Z
+updated: 2026-05-11T01:00:00Z
+context:
+  - overview
+  - architecture/*
+---
+
+# Sprint 1
+`), 0o644)
+
+	// "overview" matches exactly
+	refs := FindReferencingLists(dir, "overview")
+	if len(refs) != 1 || refs[0] != "sprint-1" {
+		t.Errorf("expected [sprint-1], got %v", refs)
+	}
+
+	// "architecture/database" matches "architecture/*"
+	refs = FindReferencingLists(dir, "architecture/database")
+	if len(refs) != 1 || refs[0] != "sprint-1" {
+		t.Errorf("expected [sprint-1], got %v", refs)
+	}
+
+	// "unrelated-doc" does not match
+	refs = FindReferencingLists(dir, "unrelated-doc")
+	if len(refs) != 0 {
+		t.Errorf("expected empty, got %v", refs)
+	}
+}
+
+func TestFindReferencingListsMultipleLists(t *testing.T) {
+	dir := setupTestProject(t)
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	// Two lists referencing the same doc via different patterns
+	os.WriteFile(filepath.Join(dir, "todos", "alpha.md"), []byte(`---
+title: Alpha
+context:
+  - api-*
+---
+
+# Alpha
+`), 0o644)
+
+	os.WriteFile(filepath.Join(dir, "todos", "beta.md"), []byte(`---
+title: Beta
+context:
+  - api-design
+---
+
+# Beta
+`), 0o644)
+
+	// No context field
+	os.WriteFile(filepath.Join(dir, "todos", "gamma.md"), []byte(`---
+title: Gamma
+---
+
+# Gamma
+`), 0o644)
+
+	refs := FindReferencingLists(dir, "api-design")
+	if len(refs) != 2 {
+		t.Fatalf("expected 2 lists, got %d: %v", len(refs), refs)
+	}
+	found := make(map[string]bool)
+	for _, r := range refs {
+		found[r] = true
+	}
+	if !found["alpha"] || !found["beta"] {
+		t.Errorf("expected alpha and beta, got %v", refs)
+	}
+}
+
+func TestFindReferencingListsEmptyContext(t *testing.T) {
+	dir := setupTestProject(t)
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	// List with empty context (context: []) should not reference anything
+	os.WriteFile(filepath.Join(dir, "todos", "empty.md"), []byte(`---
+title: Empty
+context: []
+---
+
+# Empty
+`), 0o644)
+
+	refs := FindReferencingLists(dir, "overview")
+	if len(refs) != 0 {
+		t.Errorf("empty context should not reference any doc, got %v", refs)
+	}
+}
+
+func TestFindReferencingListsNoTodos(t *testing.T) {
+	dir := setupTestProject(t)
+	// No todos directory — should return nil
+	refs := FindReferencingLists(dir, "overview")
+	if refs != nil {
+		t.Errorf("expected nil with no todos, got %v", refs)
+	}
+}
+
 func TestMatchGlobDirectoryPatterns(t *testing.T) {
 	tests := []struct {
 		pattern string

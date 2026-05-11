@@ -39,6 +39,11 @@ var knowledgeDeleteCmd = &cobra.Command{
 			return fmt.Errorf("knowledge doc %q not found", args[1])
 		}
 
+		// Warn about referencing lists
+		if refs := knowledge.FindReferencingLists(dir, args[1]); len(refs) > 0 {
+			fmt.Fprintf(os.Stderr, "⚠ Warning: this doc is referenced by context patterns in: %s\n", strings.Join(refs, ", "))
+		}
+
 		autoYes, _ := cmd.Flags().GetBool("yes")
 		if !autoYes {
 			fmt.Fprintf(os.Stderr, "Delete knowledge/%s.md? [y/N] ", args[1])
@@ -302,6 +307,10 @@ Examples:
 			} else {
 				if _, err := os.Stat(activePath); err != nil {
 					return fmt.Errorf("knowledge doc %q not found", filename)
+				}
+				// Warn about referencing lists
+				if refs := knowledge.FindReferencingLists(dir, filename); len(refs) > 0 {
+					fmt.Fprintf(os.Stderr, "⚠ Warning: this doc is referenced by context patterns in: %s\n", strings.Join(refs, ", "))
 				}
 				if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 					return err

@@ -546,11 +546,18 @@ func (s *serverCtx) handleKnowledgeDelete(_ context.Context, req mcp.CallToolReq
 		return r, err
 	}
 
+	// Check for referencing lists before deleting
+	refs := knowledge.FindReferencingLists(dir, filename)
+
 	if err := service.KnowledgeDelete(dir, filename); err != nil {
 		return errResult("%v", err)
 	}
 
-	return textResult(fmt.Sprintf("Deleted knowledge/%s.md", filename)), nil
+	msg := fmt.Sprintf("Deleted knowledge/%s.md", filename)
+	if len(refs) > 0 {
+		msg += fmt.Sprintf("\n⚠ Warning: this doc was referenced by context patterns in: %s", strings.Join(refs, ", "))
+	}
+	return textResult(msg), nil
 }
 
 func (s *serverCtx) handleTodoContext(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

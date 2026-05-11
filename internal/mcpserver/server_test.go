@@ -671,6 +671,51 @@ func TestTodoContextClear(t *testing.T) {
 	}
 }
 
+func TestKnowledgeDeleteWarnsStaleRefs(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+	dir := filepath.Join(root, "test-project")
+
+	// Set context on the "tasks" list to reference "overview"
+	list, _ := todo.LoadList(dir, "tasks")
+	list.Context = []string{"overview"}
+	todo.SaveList(dir, "tasks", list)
+
+	// Delete the referenced doc
+	text := callTool(t, ctx, ctx.handleKnowledgeDelete, map[string]any{
+		"project":  "test-project",
+		"filename": "overview",
+	})
+
+	if !strings.Contains(text, "Deleted") {
+		t.Errorf("expected 'Deleted' in output: %s", text)
+	}
+	if !strings.Contains(text, "Warning") {
+		t.Errorf("expected stale reference warning in output: %s", text)
+	}
+	if !strings.Contains(text, "tasks") {
+		t.Errorf("expected referencing list name 'tasks' in warning: %s", text)
+	}
+}
+
+func TestKnowledgeDeleteNoWarningWhenNoRefs(t *testing.T) {
+	root := setupTestRoot(t)
+	ctx := &serverCtx{projectRoot: root}
+
+	// Delete a doc that's not referenced by any context
+	text := callTool(t, ctx, ctx.handleKnowledgeDelete, map[string]any{
+		"project":  "test-project",
+		"filename": "overview",
+	})
+
+	if !strings.Contains(text, "Deleted") {
+		t.Errorf("expected 'Deleted' in output: %s", text)
+	}
+	if strings.Contains(text, "Warning") {
+		t.Errorf("should not have warning when no refs exist: %s", text)
+	}
+}
+
 func TestTodoContextMissingParams(t *testing.T) {
 	root := setupTestRoot(t)
 	ctx := &serverCtx{projectRoot: root}

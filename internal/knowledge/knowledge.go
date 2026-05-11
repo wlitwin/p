@@ -265,6 +265,80 @@ func matchGlob(pattern, name string) (bool, error) {
 	return filepath.Match(pattern, name)
 }
 
+// FindReferencingLists scans all todo list frontmatters for context patterns
+// that would match the given knowledge doc name. Returns list names that
+// reference the doc.
+func FindReferencingLists(projectDir, docName string) []string {
+	dir := filepath.Join(projectDir, "todos")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var referencing []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		patterns := extractContextPatterns(string(data))
+		if patterns == nil {
+			continue
+		}
+		for _, pattern := range patterns {
+			ok, err := matchGlob(pattern, docName)
+			if err == nil && ok {
+				referencing = append(referencing, strings.TrimSuffix(e.Name(), ".md"))
+				break
+			}
+		}
+	}
+	return referencing
+}
+
+// extractContextPatterns reads the context field from todo list frontmatter.
+func extractContextPatterns(content string) []string {
+	lines := strings.Split(content, "\n")
+	inFrontmatter := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "---" {
+			if inFrontmatter {
+				return nil // end of frontmatter, no context found
+			}
+			inFrontmatter = true
+			continue
+		}
+		if !inFrontmatter {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "context:") {
+			val := strings.TrimSpace(strings.TrimPrefix(trimmed, "context:"))
+			if val == "[]" {
+				return []string{}
+			}
+			if val != "" {
+				return []string{val}
+			}
+			// Multi-line list
+			var patterns []string
+			for j := i + 1; j < len(lines); j++ {
+				t := strings.TrimSpace(lines[j])
+				if strings.HasPrefix(t, "- ") {
+					patterns = append(patterns, strings.TrimSpace(strings.TrimPrefix(t, "- ")))
+				} else {
+					break
+				}
+			}
+			return patterns
+		}
+	}
+	return nil
+}
+
 func Delete(projectDir, filename string) error {
 	path := FilePath(projectDir, filename)
 	if _, err := os.Stat(path); err != nil {
