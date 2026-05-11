@@ -40,7 +40,7 @@ var searchCmd = &cobra.Command{
 			return err
 		}
 		for _, p := range projects {
-			searchProject(p.Name, query)
+			_ = searchProject(p.Name, query)
 		}
 		return nil
 	},
@@ -131,14 +131,8 @@ func matchContext(content, query string) string {
 		return ""
 	}
 
-	start := idx - 30
-	if start < 0 {
-		start = 0
-	}
-	end := idx + len(queryRunes) + 30
-	if end > len(runes) {
-		end = len(runes)
-	}
+	start := max(idx-30, 0)
+	end := min(idx+len(queryRunes)+30, len(runes))
 
 	snippet := strings.ReplaceAll(string(runes[start:end]), "\n", " ")
 	snippet = strings.TrimSpace(snippet)

@@ -158,11 +158,11 @@ func Render(list *List) string {
 	var sb strings.Builder
 
 	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("title: %s\n", list.Title))
-	sb.WriteString(fmt.Sprintf("created: %s\n", list.Created.Format(time.RFC3339)))
-	sb.WriteString(fmt.Sprintf("updated: %s\n", list.Updated.Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "title: %s\n", list.Title)
+	fmt.Fprintf(&sb, "created: %s\n", list.Created.Format(time.RFC3339))
+	fmt.Fprintf(&sb, "updated: %s\n", list.Updated.Format(time.RFC3339))
 	sb.WriteString("---\n\n")
-	sb.WriteString(fmt.Sprintf("# %s\n", list.Title))
+	fmt.Fprintf(&sb, "# %s\n", list.Title)
 
 	if len(list.Items) > 0 {
 		sb.WriteString("\n")
@@ -175,7 +175,7 @@ func Render(list *List) string {
 func renderItems(sb *strings.Builder, items []*Item, indent int) {
 	prefix := strings.Repeat("  ", indent)
 	for _, item := range items {
-		sb.WriteString(fmt.Sprintf("%s- %s %s", prefix, stateMarker(item.State), item.Text))
+		fmt.Fprintf(sb, "%s- %s %s", prefix, stateMarker(item.State), item.Text)
 
 		var meta []string
 		if item.Priority != "" && item.Priority != Now {

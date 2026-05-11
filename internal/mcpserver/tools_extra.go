@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
-
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/walter/p/internal/git"
@@ -115,7 +115,7 @@ func (s *serverCtx) handleProjectCreate(_ context.Context, req mcp.CallToolReque
 	if err := git.Init(dir); err != nil {
 		return errResult("git init: %v", err)
 	}
-	git.CommitAll(dir, fmt.Sprintf("p: create project %q", name))
+	_ = git.CommitAll(dir, fmt.Sprintf("p: create project %q", name))
 
 	return textResult(fmt.Sprintf("Created project %q", name)), nil
 }
@@ -147,7 +147,7 @@ func (s *serverCtx) handleProjectArchive(_ context.Context, req mcp.CallToolRequ
 	if !archived {
 		action = "unarchived"
 	}
-	git.CommitAll(dir, fmt.Sprintf("p: %s project %q", action, proj))
+	_ = git.CommitAll(dir, fmt.Sprintf("p: %s project %q", action, proj))
 
 	return textResult(fmt.Sprintf("Project %q %s", proj, action)), nil
 }
@@ -414,17 +414,8 @@ func (s *serverCtx) handleKnowledgeList(_ context.Context, req mcp.CallToolReque
 		content, _ := knowledge.Read(dir, f)
 		tags := knowledge.ExtractTags(content)
 
-		if tagFilter != "" {
-			found := false
-			for _, t := range tags {
-				if t == tagFilter {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
+		if tagFilter != "" && !slices.Contains(tags, tagFilter) {
+			continue
 		}
 
 		info, _ := os.Stat(knowledge.FilePath(dir, f))

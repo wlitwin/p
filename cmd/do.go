@@ -161,7 +161,7 @@ func buildDoPrompt(projectName, projectDir string, list *todo.List, listName str
 	sb.WriteString("\".\n\n")
 
 	sb.WriteString("## Tasks to implement\n\n")
-	sb.WriteString(fmt.Sprintf("Todo list: **%s**\n\n", listName))
+	fmt.Fprintf(&sb, "Todo list: **%s**\n\n", listName)
 
 	if len(itemIDs) > 0 {
 		sb.WriteString("Specific items to work on:\n\n")
@@ -170,7 +170,7 @@ func buildDoPrompt(projectName, projectDir string, list *todo.List, listName str
 			if err != nil {
 				continue
 			}
-			sb.WriteString(fmt.Sprintf("- #%s: %s\n", id, item.Text))
+			fmt.Fprintf(&sb, "- #%s: %s\n", id, item.Text)
 		}
 	} else {
 		sb.WriteString("Open items (work on what makes sense):\n\n")
@@ -185,7 +185,7 @@ func buildDoPrompt(projectName, projectDir string, list *todo.List, listName str
 		if err != nil {
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("### %s\n\n%s\n\n", f, content))
+		fmt.Fprintf(&sb, "### %s\n\n%s\n\n", f, content)
 	}
 
 	sb.WriteString("## Instructions\n\n")
@@ -231,7 +231,7 @@ Add a brief summary of what was implemented to the knowledge base.`, listName),
 		return git.CommitAll(projectDir, fmt.Sprintf("p: post-implementation update for %s", listName))
 	}
 
-	git.RevertChanges(projectDir)
+	_ = git.RevertChanges(projectDir)
 	fmt.Println("Changes reverted.")
 	return nil
 }

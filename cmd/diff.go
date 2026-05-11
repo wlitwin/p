@@ -67,7 +67,7 @@ var revertCmd = &cobra.Command{
 		if !autoYes {
 			fmt.Fprint(os.Stderr, "Revert this commit? [y/N] ")
 			var answer string
-			fmt.Scanln(&answer)
+			_, _ = fmt.Scanln(&answer)
 			if answer != "y" && answer != "Y" && answer != "yes" {
 				fmt.Println("Cancelled.")
 				return nil

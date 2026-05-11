@@ -33,7 +33,7 @@ var rmListCmd = &cobra.Command{
 		if !autoYes {
 			fmt.Fprintf(os.Stderr, "Delete todo list %q? [y/N] ", args[1])
 			var answer string
-			fmt.Scanln(&answer)
+			_, _ = fmt.Scanln(&answer)
 			if answer != "y" && answer != "Y" && answer != "yes" {
 				fmt.Println("Cancelled.")
 				return nil

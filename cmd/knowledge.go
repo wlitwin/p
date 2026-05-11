@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
-
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -41,7 +41,7 @@ var knowledgeDeleteCmd = &cobra.Command{
 		if !autoYes {
 			fmt.Fprintf(os.Stderr, "Delete knowledge/%s.md? [y/N] ", args[1])
 			var answer string
-			fmt.Scanln(&answer)
+			_, _ = fmt.Scanln(&answer)
 			if answer != "y" && answer != "Y" && answer != "yes" {
 				fmt.Println("Cancelled.")
 				return nil
@@ -136,17 +136,8 @@ var knowledgeListCmd = &cobra.Command{
 			}
 			tags := knowledge.ExtractTags(content)
 
-			if tagFilter != "" {
-				found := false
-				for _, t := range tags {
-					if t == tagFilter {
-						found = true
-						break
-					}
-				}
-				if !found {
-					continue
-				}
+			if tagFilter != "" && !slices.Contains(tags, tagFilter) {
+				continue
 			}
 
 			info, _ := os.Stat(knowledge.FilePath(dir, f))
@@ -183,7 +174,7 @@ var knowledgeCreateFromTemplateCmd = &cobra.Command{
 		tagsStr, _ := cmd.Flags().GetString("tags")
 		var tags []string
 		if tagsStr != "" {
-			for _, t := range strings.Split(tagsStr, ",") {
+			for t := range strings.SplitSeq(tagsStr, ",") {
 				tags = append(tags, strings.TrimSpace(t))
 			}
 		}
@@ -195,7 +186,9 @@ var knowledgeCreateFromTemplateCmd = &cobra.Command{
 		if template != "" {
 			content := templateContent(template)
 			if content != "" {
-				knowledge.Append(dir, args[1], content, "")
+				if err := knowledge.Append(dir, args[1], content, ""); err != nil {
+					return fmt.Errorf("applying template: %w", err)
+				}
 			}
 		}
 

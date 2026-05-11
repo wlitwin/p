@@ -31,8 +31,8 @@ func Acquire(projectDir string) (*Lock, error) {
 	// Try atomic creation first (O_CREATE|O_EXCL fails if file exists)
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err == nil {
-		f.WriteString(content)
-		f.Close()
+		_, _ = f.WriteString(content)
+		_ = f.Close()
 		return &Lock{path: path}, nil
 	}
 
@@ -40,7 +40,7 @@ func Acquire(projectDir string) (*Lock, error) {
 	info, readErr := Read(projectDir)
 	if readErr != nil {
 		// Can't read lock file — remove and retry
-		os.Remove(path)
+		_ = os.Remove(path)
 		return Acquire(projectDir)
 	}
 
@@ -50,19 +50,19 @@ func Acquire(projectDir string) (*Lock, error) {
 	}
 
 	// Stale lock — remove and retry atomically
-	os.Remove(path)
+	_ = os.Remove(path)
 	f, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("acquiring lock (race): %w", err)
 	}
-	f.WriteString(content)
-	f.Close()
+	_, _ = f.WriteString(content)
+	_ = f.Close()
 	return &Lock{path: path}, nil
 }
 
 func (l *Lock) Release() {
 	if l != nil {
-		os.Remove(l.path)
+		_ = os.Remove(l.path)
 	}
 }
 
