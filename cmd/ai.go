@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -42,8 +43,9 @@ type aiTaskConfig struct {
 }
 
 // runAIWithCommit resolves a project, runs an AI task, and commits any changes.
-// This is the shared flow used by plan and review commands.
-func runAIWithCommit(taskCfg aiTaskConfig) error {
+// This is the shared flow used by plan and review commands. The context
+// enables cancellation of the claude subprocess.
+func runAIWithCommit(ctx context.Context, taskCfg aiTaskConfig) error {
 	if err := requireProjectRoot(); err != nil {
 		return err
 	}
@@ -86,7 +88,7 @@ func runAIWithCommit(taskCfg aiTaskConfig) error {
 		task.AlsoNames = append(task.AlsoNames, name)
 	}
 
-	if err := ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
+	if err := ai.Run(ctx, pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
 		return err
 	}
 

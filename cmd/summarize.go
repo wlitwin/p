@@ -52,7 +52,7 @@ Example:
 			ContextPatterns: ai.ResolveContext(dir, nil),
 		}
 
-		return ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()})
+		return ai.Run(cmd.Context(), pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()})
 	},
 }
 

@@ -45,7 +45,7 @@ Examples:
 			contextPatterns = ai.ResolveContext(dir, nil)
 		}
 
-		return runAIWithCommit(aiTaskConfig{
+		return runAIWithCommit(cmd.Context(), aiTaskConfig{
 			ProjectName:     args[0],
 			Input:           args[1],
 			Mode:            ai.ModePlan,

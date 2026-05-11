@@ -98,7 +98,7 @@ Use --ai to have the AI agent decide placement and wording.`,
 				ContextPatterns: contextPatterns,
 			}
 
-			if err := ai.Run(pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
+			if err := ai.Run(cmd.Context(), pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
 				return err
 			}
 

@@ -2,12 +2,14 @@ package ai
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/glamour"
 	"github.com/walter/p/internal/knowledge"
@@ -107,7 +109,10 @@ type RunOptions struct {
 	Stderr   *os.File // stderr for claude subprocess (nil to suppress)
 }
 
-func Run(pBinary, claudeBinary, model string, task Task, opts ...RunOptions) error {
+// Run starts the claude CLI subprocess to execute an AI task. The provided
+// context controls cancellation — when ctx is cancelled the subprocess
+// receives a SIGKILL and Run returns the context error.
+func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, opts ...RunOptions) error {
 	var opt RunOptions
 	if len(opts) > 0 {
 		opt = opts[0]
@@ -146,7 +151,7 @@ func Run(pBinary, claudeBinary, model string, task Task, opts ...RunOptions) err
 
 	args = append(args, "-p", "Use the p MCP tools to complete the task described in the system prompt. Do not ask clarifying questions — make your best judgment.")
 
-	cmd := exec.Command(claudeBinary, args...)
+	cmd := exec.CommandContext(ctx, claudeBinary, args...)
 	cmd.Stderr = opt.Stderr
 
 	stdout, err := cmd.StdoutPipe()
@@ -360,7 +365,9 @@ func projectContext(task Task) string {
 }
 
 func recentGitLog(dir string) string {
-	cmd := exec.Command("git", "log", "--max-count=15", "--format=%h %cr %s")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "log", "--max-count=15", "--format=%h %cr %s")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {

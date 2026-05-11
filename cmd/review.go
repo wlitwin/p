@@ -35,7 +35,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		return runAIWithCommit(aiTaskConfig{
+		return runAIWithCommit(cmd.Context(), aiTaskConfig{
 			ProjectName:     args[0],
 			Input:           reviewInput,
 			Mode:            ai.ModePlan,
