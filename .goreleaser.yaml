@@ -1,0 +1,71 @@
+version: 2
+
+project_name: p
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: p
+    main: .
+    binary: p
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/walter/p/cmd.Version={{.Version}}
+      - -X github.com/walter/p/cmd.GitCommit={{.ShortCommit}}
+      - -X github.com/walter/p/cmd.BuildDate={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: walter
+    name: p
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+
+nfpms:
+  - id: packages
+    package_name: p
+    vendor: Walter
+    homepage: https://github.com/walter/p
+    maintainer: Walter <walter@litwinczyk.com>
+    description: CLI project knowledge & task manager
+    license: MIT
+    formats:
+      - deb
+      - rpm
