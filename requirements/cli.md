@@ -24,42 +24,76 @@ default_priority: now
 
 ## Command Structure
 
-### Project Management
+Commands are organized into groups. The most-used commands remain at the top level for quick access.
+
+### Top-level Commands (Daily Use)
 
 ```bash
 p init                              # interactive setup: set project root, etc.
-p new <project> [--description ""]  # create a new project
-p archive <project>                 # mark project as archived
-p unarchive <project>               # unarchive
 p list                              # list all projects (excludes archived)
 p list --all                        # include archived
 p list <project>                    # list all todo lists in a project
-p list <project> <list>             # show items in a specific list
+p list <project> <list|all>         # show items (use 'all' for all lists)
+p show <project> <list-or-doc>      # pretty-print a list or knowledge doc
+p status [project]                  # overview: open/blocked/done counts
+p add <project> [<list>] "<text>"   # add a todo (TUI picker if list omitted)
+p add <project> -k "<text or URL>"  # add knowledge
+p done <project> <list> <id>...     # mark items done
+p search [project] <query>          # full-text search
+p save <project> [message...]       # commit manual edits
+p config [key] [value]              # view/set global config
+p how <question>                    # ask how to do something with p
 ```
 
-### Adding Content
+### AI Commands (Top-level)
 
 ```bash
-# Add a todo — if <list> is omitted, show TUI picker to choose/create list
-p add <project> [<list>] "<text>"
-
-# Add knowledge — AI decides placement within knowledge base
-p add <project> --knowledge "<text or URL>"
-p add <project> -k "<text or URL>"
-
-# Shorthand: if input looks like a URL, default to knowledge mode
-# (can be overridden with explicit --todo flag)
+p do <project> [list] [ids...] [-m 'msg'] # AI implements todos in code repo
+p plan <project> '<desc>' [--also=P] [-y]  # AI planning — creates todos/knowledge
+p ask <project> '<question>' [-c]          # read-only AI queries
 ```
 
-### Editing Todos
+### p project — Project Lifecycle
 
 ```bash
-p done <project> <list> <item-id>         # mark done
-p block <project> <list> <item-id>        # mark blocked
-p open <project> <list> <item-id>         # reopen
-p move <project> <list> <item-id> <target-list>  # move to another list
-p priority <project> <list> <item-id> now|backlog
-p due <project> <list> <item-id> YYYY-MM-DD
+p project new <project> [--description ""]   # create a new project
+p project archive <project>                  # mark project as archived
+p project unarchive <project>                # unarchive
+p project set <project> [key] [value]        # view/set project settings
+p project describe <project> <text...>       # set project description
+p project log <project> [-n COUNT]           # git history
+p project diff <project>                     # uncommitted changes
+p project revert <project> [-y]              # undo last commit
+```
+
+### p todo — Item Management
+
+```bash
+p todo block <project> <list> <id>...        # mark blocked
+p todo open <project> <list> <id>...         # reopen
+p todo priority <project> <list> <id> now|backlog
+p todo due <project> <list> <id> YYYY-MM-DD
+p todo tag <project> <list> <id> <tags...> [--remove]
+p todo move <project> <list> <id> <target-list>
+p todo rm-list <project> <list> [-y]         # delete a todo list
+p todo archive-list <project> [list] [--restore]  # archive finished lists
+```
+
+### p ai — Specialized AI Commands
+
+```bash
+p ai review <project> [-y]          # AI reviews and can update project
+p ai summarize <project>            # AI-generated status report (read-only)
+```
+
+### p knowledge — Knowledge Docs
+
+```bash
+p knowledge create <project> <name> <title> [--template T] [--tags a,b]
+p knowledge delete <project> <doc> [-y]
+p knowledge search <project> <query>
+p knowledge list <project> [--tag TAG]
+p knowledge archive <project> <doc>
 ```
 
 ### Internal Edit Primitives

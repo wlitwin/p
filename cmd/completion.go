@@ -37,21 +37,48 @@ func listCompletionFunc(_ *cobra.Command, args []string, _ string) ([]string, co
 }
 
 func init() {
-	// Register completions for commands that take project/list args
+	// Top-level commands that take a project name as first arg
 	for _, cmd := range []*cobra.Command{
-		addCmd, archiveCmd, unarchiveCmd, logCmd, diffCmd,
-		revertCmd, askCmd, planCmd, summarizeCmd, reviewCmd,
+		addCmd, askCmd, planCmd, doCmd, showCmd, saveCmd, searchCmd,
 	} {
 		cmd.ValidArgsFunction = projectCompletionFunc
 	}
 
-	for _, cmd := range []*cobra.Command{moveCmd, rmListCmd} {
+	// p project subcommands that take a project name
+	for _, cmd := range []*cobra.Command{
+		archiveCmd, unarchiveCmd, logCmd, diffCmd, revertCmd,
+		describeCmd, setCmd,
+	} {
+		cmd.ValidArgsFunction = projectCompletionFunc
+	}
+
+	// p ai subcommands that take a project name
+	for _, cmd := range []*cobra.Command{summarizeCmd, reviewCmd} {
+		cmd.ValidArgsFunction = projectCompletionFunc
+	}
+
+	// p knowledge subcommands that take a project name
+	for _, cmd := range []*cobra.Command{
+		knowledgeDeleteCmd, knowledgeSearchCmd, knowledgeListCmd,
+		knowledgeCreateFromTemplateCmd, knowledgeArchiveCmd,
+	} {
+		cmd.ValidArgsFunction = projectCompletionFunc
+	}
+
+	// Commands that take project + list (list completion covers both)
+	for _, cmd := range []*cobra.Command{
+		moveCmd, rmListCmd, archiveListCmd,
+		priorityCmd, dueCmd, tagCmd,
+	} {
 		cmd.ValidArgsFunction = listCompletionFunc
 	}
 
-	// State commands use list completion for the second arg
-	for _, name := range []string{"done", "block", "open"} {
-		if sub, _, err := rootCmd.Find([]string{name}); err == nil {
+	// State commands created via makeStateCmd — find by name
+	if sub, _, err := rootCmd.Find([]string{"done"}); err == nil {
+		sub.ValidArgsFunction = listCompletionFunc
+	}
+	for _, name := range []string{"block", "open"} {
+		if sub, _, err := todoCmd.Find([]string{name}); err == nil {
 			sub.ValidArgsFunction = listCompletionFunc
 		}
 	}

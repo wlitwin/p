@@ -68,43 +68,58 @@ func buildHelpPrompt() string {
 	sb.WriteString("## Available commands\n\n")
 
 	commands := []struct{ cmd, desc string }{
-		{"p init", "Set up p — configure project root directory"},
-		{"p new <project> [--description '']", "Create a new project"},
+		// Top-level commands (daily use)
+		{"p add <project> [list] '<text>' [--ai] [-k] [-l LIST] [--priority now|backlog] [--due YYYY-MM-DD]", "Add a todo item or knowledge entry"},
 		{"p list", "List projects (shows path, created/updated dates)"},
 		{"p list <project>", "List todo lists and knowledge docs in a project"},
-		{"p list <project> <list> [--state open|blocked|done] [--priority now|backlog] [--tag TAG]", "List items with optional filters"},
+		{"p list <project> <list|all> [--state open|blocked|done] [--priority now|backlog] [--tag TAG]", "List items with optional filters (use 'all' for all lists)"},
 		{"p show <project> <list-or-doc> [-k]", "Show a todo list or knowledge document"},
 		{"p status [project]", "Show open/blocked/done counts"},
-		{"p add <project> [list] '<text>' [--ai] [-k] [-l LIST] [--priority now|backlog] [--due YYYY-MM-DD]", "Add a todo item or knowledge entry"},
-		{"p done/block/open <project> <list> <id> [id...]", "Change item state (supports multiple IDs)"},
-		{"p priority <project> <list> <id> now|backlog", "Set item priority"},
-		{"p due <project> <list> <id> YYYY-MM-DD", "Set item due date"},
-		{"p tag <project> <list> <id> <tags...> [--remove]", "Add or remove tags"},
-		{"p move <project> <list> <id> <target-list>", "Move item to another list"},
+		{"p done <project> <list> <id> [id...]", "Mark items done (supports multiple IDs)"},
 		{"p search [project] <query>", "Full-text search across todos and knowledge"},
-		{"p plan <project> '<description>' [--also=other-project]", "Open-ended AI planning — creates multiple todos/knowledge"},
+		{"p do <project> [list] [ids...] [-m 'message']", "Have AI implement todo items in the code repo"},
+		{"p plan <project> '<description>' [--also=other-project] [-y]", "Open-ended AI planning — creates multiple todos/knowledge"},
 		{"p ask <project> '<question>' [-c]", "Ask the AI about project state (read-only). -c continues last conversation"},
-		{"p do <project> [list] [ids...]", "Have AI implement todo items in the code repo"},
-		{"p review <project> [-y]", "AI reviews project and can update todos/knowledge"},
-		{"p summarize <project>", "AI-generated status report (read-only)"},
 		{"p save <project> [message...]", "Commit manual edits (Obsidian, text editor)"},
-		{"p log <project> [-n COUNT]", "Show git history for a project"},
-		{"p diff <project>", "Show uncommitted changes"},
-		{"p revert <project> [-y]", "Undo the last commit"},
+		{"p how <question>", "This command — ask how to do something"},
+		{"p init", "Set up p — configure project root directory"},
 		{"p config [key] [value]", "View or set global config (project_root, claude_path, claude_model)"},
-		{"p set <project> [key] [value]", "View or set project settings (description, code_dir)"},
-		{"p describe <project> <text...>", "Set project description"},
-		{"p archive/unarchive <project>", "Archive or unarchive a project"},
-		{"p rm-list <project> <list> [-y]", "Delete a todo list"},
+
+		// p project — project lifecycle
+		{"p project new <project> [--description '']", "Create a new project"},
+		{"p project archive/unarchive <project>", "Archive or unarchive a project"},
+		{"p project set <project> [key] [value]", "View or set project settings (description, code_dir)"},
+		{"p project describe <project> <text...>", "Set project description"},
+		{"p project log <project> [-n COUNT]", "Show git history for a project"},
+		{"p project diff <project>", "Show uncommitted changes"},
+		{"p project revert <project> [-y]", "Undo the last commit"},
+
+		// p todo — item management
+		{"p todo block <project> <list> <id> [id...]", "Mark items blocked"},
+		{"p todo open <project> <list> <id> [id...]", "Reopen items"},
+		{"p todo priority <project> <list> <id> now|backlog", "Set item priority"},
+		{"p todo due <project> <list> <id> YYYY-MM-DD", "Set item due date"},
+		{"p todo tag <project> <list> <id> <tags...> [--remove]", "Add or remove tags"},
+		{"p todo move <project> <list> <id> <target-list>", "Move item to another list"},
+		{"p todo rm-list <project> <list> [-y]", "Delete a todo list"},
+		{"p todo archive-list <project> [list] [--restore]", "Archive a finished list (or auto-archive all 100% done)"},
+
+		// p ai — specialized AI commands
+		{"p ai review <project> [-y]", "AI reviews project and can update todos/knowledge"},
+		{"p ai summarize <project>", "AI-generated status report (read-only)"},
+
+		// p knowledge — docs
+		{"p knowledge create <project> <name> <title> [--template decision-record|meeting-notes|runbook] [--tags a,b]", "Create a knowledge doc"},
 		{"p knowledge delete <project> <doc> [-y]", "Delete a knowledge document"},
 		{"p knowledge search <project> <query>", "Search knowledge documents"},
 		{"p knowledge list <project> [--tag TAG]", "List knowledge docs with tags and sizes"},
-		{"p knowledge create <project> <name> <title> [--template decision-record|meeting-notes|runbook] [--tags a,b]", "Create a knowledge doc"},
+		{"p knowledge archive <project> <doc>", "Archive a knowledge document"},
+
+		// Internal / advanced
 		{"p edit todo add/update/state/remove <project> <list> ...", "Deterministic todo edit primitives"},
 		{"p edit knowledge create/append/replace/rename <project> ...", "Deterministic knowledge edit primitives"},
 		{"p edit open <project> <name> [-k]", "Open a file in $EDITOR"},
 		{"p mcp", "Run as MCP server (22 tools, used internally by AI commands)"},
-		{"p how <question>", "This command — ask how to do something"},
 	}
 
 	for _, c := range commands {

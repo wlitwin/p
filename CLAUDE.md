@@ -12,6 +12,11 @@ go test ./internal/todo/ # run parser tests specifically
 
 - `main.go` — entrypoint
 - `cmd/` — Cobra CLI commands (one file per command)
+  - `cmd/root.go` — root command, config, helpers
+  - `cmd/project.go` — `p project` parent (new, archive, set, describe, log, diff, revert)
+  - `cmd/todo.go` — `p todo` parent (block, open, priority, due, tag, move, rm-list, archive-list)
+  - `cmd/ai.go` — `p ai` parent (review, summarize)
+  - `cmd/knowledge.go` — `p knowledge` parent (create, delete, search, list, archive)
 - `internal/config/` — XDG config loading/saving
 - `internal/project/` — project CRUD (create, list, archive, resolve)
 - `internal/todo/` — todo list parsing, rendering, item CRUD
@@ -20,6 +25,7 @@ go test ./internal/todo/ # run parser tests specifically
 - `internal/ai/` — AI orchestration (claude subprocess, system prompt, MCP config)
 - `internal/mcpserver/` — MCP stdio server exposing edit primitives
 - `internal/tui/` — Bubbletea picker and input components
+- `docs/` — usage guide
 - `requirements/` — design docs and requirements
 
 ## Key Design Decisions

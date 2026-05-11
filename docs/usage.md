@@ -54,8 +54,8 @@ p how <question>          # Ask how to do something with p
 ### Create projects
 
 ```bash
-p new api-service --description "REST API for the mobile app"
-p new design-docs
+p project new api-service --description "REST API for the mobile app"
+p project new design-docs
 ```
 
 Project names must be alphanumeric with hyphens or underscores (no spaces).
@@ -79,8 +79,8 @@ p status api-service      # Detailed view of one project
 ### Set project metadata
 
 ```bash
-p describe api-service REST API for the mobile app
-p set api-service code_dir ~/code/api-service
+p project describe api-service REST API for the mobile app
+p project set api-service code_dir ~/code/api-service
 ```
 
 The `code_dir` setting links a project to a code repository, enabling the `p do` command.
@@ -88,16 +88,16 @@ The `code_dir` setting links a project to a code repository, enabling the `p do`
 ### View project settings
 
 ```bash
-p set api-service                       # Show all settings
-p set api-service code_dir              # Show one setting
+p project set api-service                       # Show all settings
+p project set api-service code_dir              # Show one setting
 ```
 
 ### Archive/unarchive projects
 
 ```bash
-p archive old-project       # Hide from default listing
-p unarchive old-project     # Restore to active listing
-p list --all                # See archived projects
+p project archive old-project       # Hide from default listing
+p project unarchive old-project     # Restore to active listing
+p list --all                        # See archived projects
 ```
 
 ---
@@ -182,16 +182,16 @@ p show api-service architecture -k      # Explicitly show as knowledge doc
 ### Delete a todo list
 
 ```bash
-p rm-list api-service old-tasks         # Prompts for confirmation
-p rm-list api-service old-tasks -y      # Skip confirmation
+p todo rm-list api-service old-tasks         # Prompts for confirmation
+p todo rm-list api-service old-tasks -y      # Skip confirmation
 ```
 
 ### Archive completed lists
 
 ```bash
-p archive-list api-service feature-a              # Archive one list
-p archive-list api-service                        # Auto-archive all 100% done lists
-p archive-list api-service feature-a --restore    # Restore from archive
+p todo archive-list api-service feature-a              # Archive one list
+p todo archive-list api-service                        # Auto-archive all 100% done lists
+p todo archive-list api-service feature-a --restore    # Restore from archive
 ```
 
 ---
@@ -213,8 +213,8 @@ Items are identified by their position in the list. Nested items use dot notatio
 
 ```bash
 p done api-service tasks 1              # Mark item #1 as done
-p block api-service tasks 3             # Mark item #3 as blocked
-p open api-service tasks 2              # Reopen item #2
+p todo block api-service tasks 3        # Mark item #3 as blocked
+p todo open api-service tasks 2         # Reopen item #2
 ```
 
 Bulk state changes — mark multiple items at once:
@@ -226,27 +226,27 @@ p done api-service tasks 1 2 3          # Mark items 1, 2, and 3 as done
 ### Set priority
 
 ```bash
-p priority api-service tasks 1 now      # High priority (default)
-p priority api-service tasks 1 backlog  # Low priority
+p todo priority api-service tasks 1 now      # High priority (default)
+p todo priority api-service tasks 1 backlog  # Low priority
 ```
 
 ### Set due date
 
 ```bash
-p due api-service tasks 1 2026-05-20
+p todo due api-service tasks 1 2026-05-20
 ```
 
 ### Add/remove tags
 
 ```bash
-p tag api-service tasks 1 bug frontend          # Add tags
-p tag api-service tasks 1 --remove bug          # Remove a tag
+p todo tag api-service tasks 1 bug frontend          # Add tags
+p todo tag api-service tasks 1 --remove bug          # Remove a tag
 ```
 
 ### Move items between lists
 
 ```bash
-p move api-service tasks 3 done-items
+p todo move api-service tasks 3 done-items
 # Moves item #3 from "tasks" to "done-items" (creates list if needed)
 ```
 
@@ -406,8 +406,8 @@ The `--also` flag includes context from other projects so the AI can reason acro
 ### AI review (reads + writes)
 
 ```bash
-p review api-service
-p review api-service -y     # Auto-confirm changes
+p ai review api-service
+p ai review api-service -y     # Auto-confirm changes
 ```
 
 The AI reviews recent git history, current todos, and knowledge docs. It can:
@@ -419,7 +419,7 @@ The AI reviews recent git history, current todos, and knowledge docs. It can:
 ### AI summary (read-only)
 
 ```bash
-p summarize api-service
+p ai summarize api-service
 ```
 
 Generates a comprehensive status report covering project health, progress, blockers, and suggested next steps.
@@ -475,8 +475,8 @@ Supported prompt files:
 - `.p/prompt-do.md` — Additional instructions for `p do`
 - `.p/prompt-ask.md` — Additional instructions for `p ask`
 - `.p/prompt-plan.md` — Additional instructions for `p plan`
-- `.p/prompt-review.md` — Additional instructions for `p review`
-- `.p/prompt-summarize.md` — Additional instructions for `p summarize`
+- `.p/prompt-review.md` — Additional instructions for `p ai review`
+- `.p/prompt-summarize.md` — Additional instructions for `p ai summarize`
 - `.p/prompt-add.md` — Additional instructions for `p add --ai`
 
 ---
@@ -488,8 +488,8 @@ Every mutation in `p` auto-commits to the project's git repo. This gives you ful
 ### View history
 
 ```bash
-p log api-service               # Last 20 commits
-p log api-service -n 50         # Last 50 commits
+p project log api-service               # Last 20 commits
+p project log api-service -n 50         # Last 50 commits
 ```
 
 Output:
@@ -502,7 +502,7 @@ i7j8k9l  yesterday    p: AI plan — Break down auth migration
 ### View uncommitted changes
 
 ```bash
-p diff api-service
+p project diff api-service
 ```
 
 Useful after using `p edit open` to manually edit files — shows what will be committed on the next `p save`.
@@ -510,8 +510,8 @@ Useful after using `p edit open` to manually edit files — shows what will be c
 ### Undo the last change
 
 ```bash
-p revert api-service            # Shows what will be reverted, asks for confirmation
-p revert api-service -y         # Skip confirmation
+p project revert api-service            # Shows what will be reverted, asks for confirmation
+p project revert api-service -y         # Skip confirmation
 ```
 
 ### Commit manual edits
@@ -543,9 +543,9 @@ Config is stored at `~/.config/p/config.json` (XDG compliant).
 ### Per-project settings
 
 ```bash
-p set api-service                           # Show all settings
-p set api-service code_dir ~/code/api       # Link code repository
-p set api-service description "The API"     # Set description
+p project set api-service                           # Show all settings
+p project set api-service code_dir ~/code/api       # Link code repository
+p project set api-service description "The API"     # Set description
 ```
 
 ### Shell completions
@@ -622,8 +622,8 @@ p plan api-service "Plan the sprint" --verbose
 
 ```bash
 # Set up
-p new side-project --description "Weekend iOS app"
-p set side-project code_dir ~/code/ios-app
+p project new side-project --description "Weekend iOS app"
+p project set side-project code_dir ~/code/ios-app
 
 # Plan the work
 p plan side-project "Break this into milestones for an MVP"
@@ -644,36 +644,36 @@ p status side-project
 p knowledge create side-project arch "Architecture Decisions" --template decision-record
 
 # Weekly check-in
-p review side-project
+p ai review side-project
 ```
 
 ### Workflow 2: Sprint planning with AI
 
 ```bash
 # Start of sprint — review current state
-p summarize api-service
+p ai summarize api-service
 
 # Have AI analyze and create sprint tasks
 p plan api-service "Create sprint-23 todo list with tasks for the next 2 weeks. \
   Focus on the auth migration and the performance issues from last sprint."
 
 # Tag items for the sprint
-p tag api-service sprint-23 1 sprint-23
-p tag api-service sprint-23 2 sprint-23
+p todo tag api-service sprint-23 1 sprint-23
+p todo tag api-service sprint-23 2 sprint-23
 
 # Mid-sprint check
 p ask api-service "What's at risk for this sprint?"
 
 # End of sprint
-p review api-service
-p archive-list api-service sprint-23    # Auto-archives if all done
+p ai review api-service
+p todo archive-list api-service sprint-23    # Auto-archives if all done
 ```
 
 ### Workflow 3: Knowledge base for a team
 
 ```bash
 # Set up the project
-p new team-docs --description "Engineering team knowledge base"
+p project new team-docs --description "Engineering team knowledge base"
 
 # Create structured docs
 p knowledge create team-docs onboarding "Onboarding Guide" --tags team,process
@@ -698,7 +698,7 @@ p save team-docs updated onboarding guide with new team member info
 ```bash
 # Quick bug entry
 p add api-service bugs "Login fails on Safari — reported by customer X"
-p tag api-service bugs 1 critical safari
+p todo tag api-service bugs 1 critical safari
 
 # AI triage
 p ask api-service "Which bugs are most critical and what order should we fix them?"
@@ -733,5 +733,5 @@ p search "authentication"
 - **URL auto-detection**: Passing a URL to `p add` automatically switches to knowledge mode with AI processing.
 - **Recurring tasks**: Items with `recur=weekly` (or `daily`, `monthly`) automatically reopen when marked done.
 - **Wiki links**: Use `[[doc-name]]` in knowledge docs and todo item text to cross-reference documents.
-- **Auto-archive**: Run `p archive-list <project>` without a list name to automatically archive all 100%-done lists.
+- **Auto-archive**: Run `p todo archive-list <project>` without a list name to automatically archive all 100%-done lists.
 - **Project locking**: Concurrent access is safe — `p` uses file locks to prevent conflicts when multiple processes access the same project.
