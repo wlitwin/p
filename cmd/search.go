@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/walter/p/internal/display"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/service"
@@ -73,46 +74,12 @@ func searchProject(name, queryLower string) error {
 		} else {
 			path := filepath.Join("knowledge", m.File+".md")
 			content, _ := knowledge.Read(dir, m.File)
-			fmt.Printf("  %s %s\n", tui.Cyan.Render(path), matchContext(content, queryLower))
+			fmt.Printf("  %s %s\n", tui.Cyan.Render(path), display.MatchContext(content, queryLower))
 		}
 	}
 
 	fmt.Println()
 	return nil
-}
-
-func matchContext(content, query string) string {
-	runes := []rune(content)
-	lowerRunes := []rune(strings.ToLower(content))
-	queryRunes := []rune(strings.ToLower(query))
-
-	idx := -1
-	for i := 0; i <= len(lowerRunes)-len(queryRunes); i++ {
-		if string(lowerRunes[i:i+len(queryRunes)]) == string(queryRunes) {
-			idx = i
-			break
-		}
-	}
-	if idx == -1 {
-		return ""
-	}
-
-	start := max(idx-30, 0)
-	end := min(idx+len(queryRunes)+30, len(runes))
-
-	snippet := strings.ReplaceAll(string(runes[start:end]), "\n", " ")
-	snippet = strings.TrimSpace(snippet)
-
-	prefix := ""
-	if start > 0 {
-		prefix = "..."
-	}
-	suffix := ""
-	if end < len(runes) {
-		suffix = "..."
-	}
-
-	return tui.Dim.Render(prefix + snippet + suffix)
 }
 
 func init() {

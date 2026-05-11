@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/ai"
+	"github.com/walter/p/internal/display"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/service"
@@ -45,7 +45,7 @@ Use --ai to have the AI agent decide placement and wording.`,
 			text = args[1]
 		}
 
-		if !isKnowledge && looksLikeURL(text) && !cmd.Flags().Changed("knowledge") {
+		if !isKnowledge && display.LooksLikeURL(text) && !cmd.Flags().Changed("knowledge") {
 			fmt.Fprintf(os.Stderr, "Detected URL — defaulting to knowledge mode with AI.\n")
 			isKnowledge = true
 			useAI = true
@@ -102,7 +102,7 @@ Use --ai to have the AI agent decide placement and wording.`,
 
 			fmt.Fprintf(os.Stderr, "\n--- Changes ---\n%s\n", diff)
 
-			commitMsg := fmt.Sprintf("p: AI added %s content from: %s", mode, truncate(text, 60))
+			commitMsg := fmt.Sprintf("p: AI added %s content from: %s", mode, display.Truncate(text, 60))
 			if err := git.CommitAll(dir, commitMsg); err != nil {
 				return fmt.Errorf("committing: %w", err)
 			}
@@ -144,18 +144,6 @@ Use --ai to have the AI agent decide placement and wording.`,
 		fmt.Printf("Added to %s/%s: %s\n", projectName, listName, text)
 		return nil
 	},
-}
-
-func looksLikeURL(s string) bool {
-	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
-}
-
-func truncate(s string, max int) string {
-	runes := []rune(s)
-	if len(runes) <= max {
-		return s
-	}
-	return string(runes[:max]) + "..."
 }
 
 func pickList(projectDir string) (string, error) {

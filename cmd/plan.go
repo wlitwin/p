@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/ai"
+	"github.com/walter/p/internal/display"
 )
 
 var planCmd = &cobra.Command{
@@ -25,7 +26,7 @@ Examples:
 			Input:       args[1],
 			Mode:        ai.ModePlan,
 			CommandName: "plan",
-			CommitMsg:   fmt.Sprintf("p: AI plan — %s", truncate(args[1], 60)),
+			CommitMsg:   fmt.Sprintf("p: AI plan — %s", display.Truncate(args[1], 60)),
 			AlsoNames:   also,
 		})
 	},

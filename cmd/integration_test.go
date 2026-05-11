@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/walter/p/internal/config"
+	"github.com/walter/p/internal/display"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
@@ -473,7 +474,7 @@ func TestIntegrationFilterItems(t *testing.T) {
 	}
 
 	// Filter by state: open
-	filtered := filterItems(items, "open", "", "")
+	filtered := display.FilterItems(items, "open", "", "")
 	if len(filtered) != 2 {
 		t.Errorf("filter state=open: expected 2 items, got %d", len(filtered))
 	}
@@ -484,7 +485,7 @@ func TestIntegrationFilterItems(t *testing.T) {
 	}
 
 	// Filter by priority: backlog
-	filtered = filterItems(items, "", "backlog", "")
+	filtered = display.FilterItems(items, "", "backlog", "")
 	if len(filtered) != 2 {
 		t.Errorf("filter priority=backlog: expected 2 items, got %d", len(filtered))
 	}
@@ -495,7 +496,7 @@ func TestIntegrationFilterItems(t *testing.T) {
 	}
 
 	// Filter by tag: bug
-	filtered = filterItems(items, "", "", "bug")
+	filtered = display.FilterItems(items, "", "", "bug")
 	if len(filtered) != 1 {
 		t.Errorf("filter tag=bug: expected 1 item, got %d", len(filtered))
 	}
@@ -504,7 +505,7 @@ func TestIntegrationFilterItems(t *testing.T) {
 	}
 
 	// No filter — all items returned
-	filtered = filterItems(items, "", "", "")
+	filtered = display.FilterItems(items, "", "", "")
 	if len(filtered) != 4 {
 		t.Errorf("no filter: expected 4 items, got %d", len(filtered))
 	}
@@ -539,13 +540,13 @@ func TestIntegrationHasTag(t *testing.T) {
 		Tags: []string{"bug", "frontend"},
 	}
 
-	if !hasTag(item, "bug") {
+	if !display.HasTag(item, "bug") {
 		t.Error("hasTag should return true for 'bug'")
 	}
-	if !hasTag(item, "frontend") {
+	if !display.HasTag(item, "frontend") {
 		t.Error("hasTag should return true for 'frontend'")
 	}
-	if hasTag(item, "backend") {
+	if display.HasTag(item, "backend") {
 		t.Error("hasTag should return false for 'backend'")
 	}
 }
@@ -653,26 +654,26 @@ func TestIntegrationInputValidation(t *testing.T) {
 }
 
 func TestIntegrationLooksLikeURL(t *testing.T) {
-	if !looksLikeURL("http://example.com") {
+	if !display.LooksLikeURL("http://example.com") {
 		t.Error("http://example.com should look like a URL")
 	}
-	if !looksLikeURL("https://example.com") {
+	if !display.LooksLikeURL("https://example.com") {
 		t.Error("https://example.com should look like a URL")
 	}
-	if looksLikeURL("not a url") {
+	if display.LooksLikeURL("not a url") {
 		t.Error("'not a url' should not look like a URL")
 	}
-	if looksLikeURL("ftp://example.com") {
+	if display.LooksLikeURL("ftp://example.com") {
 		t.Error("ftp://example.com should not look like a URL")
 	}
 }
 
 func TestIntegrationTruncate(t *testing.T) {
-	if result := truncate("short", 10); result != "short" {
-		t.Errorf("truncate('short', 10) = %q, want 'short'", result)
+	if result := display.Truncate("short", 10); result != "short" {
+		t.Errorf("display.Truncate('short', 10) = %q, want 'short'", result)
 	}
 
-	result := truncate("this is a long string", 10)
+	result := display.Truncate("this is a long string", 10)
 	if !strings.HasSuffix(result, "...") {
 		t.Errorf("truncated string should end with '...', got %q", result)
 	}
@@ -684,19 +685,19 @@ func TestIntegrationTruncate(t *testing.T) {
 }
 
 func TestIntegrationContainsIgnoreCase(t *testing.T) {
-	if !containsIgnoreCase("Hello World", "hello") {
+	if !display.ContainsIgnoreCase("Hello World", "hello") {
 		t.Error("containsIgnoreCase should find 'hello' in 'Hello World'")
 	}
-	if !containsIgnoreCase("Hello World", "WORLD") {
+	if !display.ContainsIgnoreCase("Hello World", "WORLD") {
 		t.Error("containsIgnoreCase should find 'WORLD' in 'Hello World'")
 	}
-	if containsIgnoreCase("Hello World", "missing") {
+	if display.ContainsIgnoreCase("Hello World", "missing") {
 		t.Error("containsIgnoreCase should not find 'missing' in 'Hello World'")
 	}
 }
 
 func TestIntegrationDimTextPreservingLinks(t *testing.T) {
-	result := dimTextPreservingLinks("text [[link]] more")
+	result := display.DimTextPreservingLinks("text [[link]] more")
 	if !strings.Contains(result, "[[link]]") {
 		t.Errorf("wiki link should be preserved in output, got %q", result)
 	}

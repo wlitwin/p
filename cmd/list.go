@@ -5,10 +5,10 @@ import (
 
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/walter/p/internal/display"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
@@ -154,7 +154,7 @@ func listAllItems(projectName string, cmd *cobra.Command) error {
 			continue
 		}
 
-		filtered := filterItems(list.Items, stateFilter, priorityFilter, tagFilter)
+		filtered := display.FilterItems(list.Items, stateFilter, priorityFilter, tagFilter)
 		if len(filtered) == 0 {
 			continue
 		}
@@ -163,7 +163,7 @@ func listAllItems(projectName string, cmd *cobra.Command) error {
 			fmt.Println()
 		}
 		fmt.Printf("%s\n\n", tui.Bold.Render("# "+name))
-		printItems(filtered, "", 1, dir)
+		display.PrintItems(filtered, "", 1, dir)
 	}
 	return nil
 }
@@ -183,104 +183,11 @@ func listItems(projectName, listName string, cmd *cobra.Command) error {
 	priorityFilter, _ := cmd.Flags().GetString("priority")
 	tagFilter, _ := cmd.Flags().GetString("tag")
 
-	filtered := filterItems(list.Items, stateFilter, priorityFilter, tagFilter)
+	filtered := display.FilterItems(list.Items, stateFilter, priorityFilter, tagFilter)
 
 	fmt.Printf("# %s\n\n", list.Title)
-	printItems(filtered, "", 1, dir)
+	display.PrintItems(filtered, "", 1, dir)
 	return nil
-}
-
-func filterItems(items []*todo.Item, state, priority, tag string) []*todo.Item {
-	if state == "" && priority == "" && tag == "" {
-		return items
-	}
-
-	var result []*todo.Item
-	for _, item := range items {
-		if state != "" && string(item.State) != state {
-			continue
-		}
-		if priority != "" && string(item.Priority) != priority {
-			continue
-		}
-		if tag != "" && !hasTag(item, tag) {
-			continue
-		}
-		result = append(result, item)
-	}
-	return result
-}
-
-func dimTextPreservingLinks(text string) string {
-	// Dim text segments between wiki links, leaving [[...]] untouched for later rendering
-	parts := wikiLinkSplit.Split(text, -1)
-	links := wikiLinkSplit.FindAllString(text, -1)
-
-	var result string
-	for i, part := range parts {
-		result += tui.Dim.Render(part)
-		if i < len(links) {
-			result += links[i]
-		}
-	}
-	return result
-}
-
-var wikiLinkSplit = regexp.MustCompile(`\[\[[^\]]+\]\]`)
-
-func hasTag(item *todo.Item, tag string) bool {
-	for _, t := range item.Tags {
-		if t == tag {
-			return true
-		}
-	}
-	return false
-}
-
-func printItems(items []*todo.Item, prefix string, start int, projectDir ...string) {
-	dir := ""
-	if len(projectDir) > 0 {
-		dir = projectDir[0]
-	}
-
-	for i, item := range items {
-		id := fmt.Sprintf("%s%d", prefix, start+i)
-		marker := "[ ]"
-		switch item.State {
-		case todo.Done:
-			marker = "[x]"
-		case todo.Blocked:
-			marker = "[-]"
-		}
-
-		styledMarker := tui.StateStyle(marker)
-		styledID := tui.Dim.Render(id + ".")
-
-		var meta string
-		if item.Priority == todo.Backlog {
-			meta += " " + tui.Dim.Render("priority=backlog")
-		}
-		if item.Due != "" {
-			meta += " " + tui.Cyan.Render("due="+item.Due)
-		}
-		if item.DoneDate != "" {
-			meta += " " + tui.Green.Render("done="+item.DoneDate)
-		}
-
-		text := item.Text
-		if item.State == todo.Done {
-			text = dimTextPreservingLinks(text)
-		}
-		if dir != "" {
-			text = tui.RenderWikiLinks(text, dir)
-		}
-
-		fmt.Printf("  %s %s %s%s\n", styledID, styledMarker, text, meta)
-
-		if len(item.Children) > 0 {
-			printItems(item.Children, id+".", 1, dir)
-		}
-	}
 }
 
 func init() {

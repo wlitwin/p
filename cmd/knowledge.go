@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/walter/p/internal/display"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
@@ -88,8 +89,8 @@ var knowledgeSearchCmd = &cobra.Command{
 			if err != nil {
 				continue
 			}
-			if containsIgnoreCase(content, query) {
-				fmt.Printf("  %s  %s\n", f+".md", matchContext(content, query))
+			if display.ContainsIgnoreCase(content, query) {
+				fmt.Printf("  %s  %s\n", f+".md", display.MatchContext(content, query))
 				found = true
 			}
 		}
@@ -99,10 +100,6 @@ var knowledgeSearchCmd = &cobra.Command{
 		}
 		return nil
 	},
-}
-
-func containsIgnoreCase(s, substr string) bool {
-	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 var knowledgeListCmd = &cobra.Command{
