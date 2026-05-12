@@ -101,7 +101,10 @@ func buildHelpPrompt() string {
 		{"p how [question]", "This command — ask how to do something (interactive if no question)"},
 		{"p aliases [bash|zsh|fish]", "Print shell aliases (eval \"$(p aliases)\" in your profile)"},
 		{"p init", "Set up p — configure project root directory"},
-		{"p config [key] [value]", "View or set global config (project_root, claude_path, claude_model)"},
+		{"p config [key] [value]", "View or set global config (project_root, claude_path, claude_model, theme, glamour_theme, colors.*)"},
+		{"p config --list", "List available theme presets"},
+		{"p config --preview", "Preview theme presets with sample colors"},
+		{"p ui [project] [list]", "Launch interactive TUI (also runs on bare `p`)"},
 
 		// p project — project lifecycle
 		{"p project new <project> [--description '']", "Create a new project"},
@@ -155,6 +158,8 @@ func buildHelpPrompt() string {
 	sb.WriteString("- **States**: `open`, `blocked`, `done`\n")
 	sb.WriteString("- Every mutation auto-commits to git\n")
 	sb.WriteString("- `code_dir` links a project to a code repository for `p do`\n")
+	sb.WriteString("- **TUI**: Running bare `p` or `p ui` launches a full-screen interactive interface with arrow/j/k navigation, Tab to switch between todos and knowledge, ? for help, T to cycle themes\n")
+	sb.WriteString("- **Theming**: `p config theme <name>` sets a color preset (default, high-contrast, light, solarized, dracula, catppuccin, nord). Override individual colors with `p config colors.<key> <value>` (ANSI 256 or hex). `p config glamour_theme auto|dark|light|notty` controls markdown rendering. Set `NO_COLOR=1` env var to disable all color.\n")
 	sb.WriteString("- **Custom AI prompts**: Create `.p/prompt.md` in a project for base AI instructions that apply to all AI commands. Optionally create `.p/prompt-do.md`, `.p/prompt-ask.md`, `.p/prompt-plan.md`, `.p/prompt-review.md`, `.p/prompt-summarize.md`, or `.p/prompt-add.md` for mode-specific instructions (appended to the base prompt).\n")
 	sb.WriteString("- **Prompt templates**: To fully replace the default prompt (not just append), create `.p/template-{mode}.md` (e.g. `.p/template-ask.md`). Uses Go text/template syntax with variables: `{{.ProjectName}}`, `{{.ProjectDir}}`, `{{.ProjectDescription}}`, `{{.Mode}}`, `{{.Input}}`, `{{.ListName}}`, `{{.TodoLists}}`, `{{.TodoList}}`, `{{.KnowledgeDocs}}`, `{{.GitLog}}`, `{{.CustomPrompt}}`. Falls back to default prompt if template has errors.\n")
 
