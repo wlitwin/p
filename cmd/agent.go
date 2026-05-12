@@ -164,6 +164,16 @@ Examples:
 }
 
 func buildAgentPrompt(projectName, projectDir string, list *todo.List, listName string, iteration, maxIter int, userMessage string) string {
+	// Check for a full template replacement first
+	if tmpl := ai.LoadTemplate(projectDir, "agent"); tmpl != "" {
+		contextPatterns := ai.ResolveContext(projectDir, list)
+		data := ai.BuildTemplateData(projectName, projectDir, "agent", userMessage, listName, contextPatterns)
+		if result, err := ai.ExecuteTemplate(tmpl, data); err == nil {
+			return result
+		}
+		fmt.Fprintf(os.Stderr, "warning: prompt template error, using default prompt\n")
+	}
+
 	var sb strings.Builder
 
 	sb.WriteString("You are implementing tasks for the project \"")

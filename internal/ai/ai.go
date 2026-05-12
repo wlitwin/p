@@ -253,6 +253,20 @@ func RenderMarkdown(text string) (string, error) {
 }
 
 func buildPrompt(task Task) string {
+	// Check for a full template replacement first
+	cmdName := task.CommandName
+	if cmdName == "" {
+		cmdName = string(task.Mode)
+	}
+	if tmpl := LoadTemplate(task.ProjectDir, cmdName); tmpl != "" {
+		data := BuildTemplateData(task.ProjectName, task.ProjectDir, cmdName, task.Input, task.ListName, task.ContextPatterns)
+		if result, err := ExecuteTemplate(tmpl, data); err == nil {
+			return result
+		}
+		// On template error, fall through to default prompt
+		fmt.Fprintf(os.Stderr, "warning: prompt template error, using default prompt\n")
+	}
+
 	var sb strings.Builder
 
 	sb.WriteString("You are a project knowledge manager for the project \"")
@@ -276,10 +290,6 @@ func buildPrompt(task Task) string {
 	}
 
 	// Inject custom system prompt from .p/prompt.md and .p/prompt-{mode}.md
-	cmdName := task.CommandName
-	if cmdName == "" {
-		cmdName = string(task.Mode)
-	}
 	customPrompt := LoadCustomPrompt(task.ProjectDir, cmdName)
 	if customPrompt != "" {
 		sb.WriteString("## Custom instructions\n\n")
