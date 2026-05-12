@@ -357,11 +357,14 @@ func (a *App) View() string {
 		content = a.activeView.View()
 	}
 
-	// Status bar at the bottom
+	// Status bar — always present to avoid layout shift when messages appear.
+	// The contentHeight() reserves 2 lines for this area.
 	if a.errorMsg != "" {
 		content += "\n" + ErrorStyle.Render("  ⚠ "+a.errorMsg)
 	} else if a.statusMsg != "" {
 		content += "\n" + StatusStyle.Render("  "+a.statusMsg)
+	} else {
+		content += "\n"
 	}
 
 	return content
