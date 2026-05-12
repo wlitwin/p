@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/walter/p/internal/knowledge"
@@ -61,8 +62,13 @@ func (v *KnowledgeView) loadContent() tea.Cmd {
 func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		oldWidth := v.width
 		v.width = msg.Width
 		v.height = msg.Height
+		// Re-render if width changed (glamour word-wrap depends on width)
+		if v.loaded && v.content != "" && msg.Width != oldWidth {
+			v.lines = v.renderContent(v.content)
+		}
 		return v, nil
 
 	case KnowledgeContentLoadedMsg:
@@ -125,54 +131,74 @@ func (v *KnowledgeView) maxScroll() int {
 	return max(0, len(v.lines)-v.viewportHeight())
 }
 
-// renderContent parses markdown content into styled terminal lines.
+// renderContent renders markdown content using glamour for proper formatting
+// of tables, code blocks, lists, etc. YAML frontmatter is styled separately.
 func (v *KnowledgeView) renderContent(content string) []string {
-	raw := strings.Split(content, "\n")
+	// Split off YAML frontmatter
+	frontmatter, markdown := splitFrontmatter(content)
+
 	var lines []string
-	inFrontmatter := false
 
-	for _, line := range raw {
-		trimmed := strings.TrimSpace(line)
+	// Render frontmatter dimly
+	if frontmatter != "" {
+		for _, line := range strings.Split(frontmatter, "\n") {
+			lines = append(lines, HelpStyle.Render("  "+line))
+		}
+		lines = append(lines, "") // blank separator
+	}
 
-		// YAML frontmatter: style dimly
-		if trimmed == "---" {
-			if !inFrontmatter {
-				inFrontmatter = true
-				lines = append(lines, HelpStyle.Render("  "+line))
-				continue
+	// Render markdown body with glamour
+	if markdown != "" {
+		wordWrap := 100
+		if v.width > 0 {
+			wordWrap = max(40, v.width-6) // leave margin for indentation
+		}
+
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(wordWrap),
+		)
+		if err == nil {
+			rendered, err := renderer.Render(markdown)
+			if err == nil {
+				// glamour output ends with trailing newlines; trim and split
+				rendered = strings.TrimRight(rendered, "\n")
+				for _, line := range strings.Split(rendered, "\n") {
+					lines = append(lines, "  "+line)
+				}
+				return lines
 			}
-			inFrontmatter = false
-			lines = append(lines, HelpStyle.Render("  "+line))
-			continue
-		}
-		if inFrontmatter {
-			lines = append(lines, HelpStyle.Render("  "+line))
-			continue
 		}
 
-		// Headings: bold + colored
-		if strings.HasPrefix(trimmed, "#") {
-			lines = append(lines, "  "+TitleStyle.Render(line))
-			continue
-		}
-
-		// Bullet points: highlight marker
-		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+		// Fallback: plain text if glamour fails
+		for _, line := range strings.Split(markdown, "\n") {
 			lines = append(lines, "  "+line)
-			continue
 		}
-
-		// Code blocks (fenced)
-		if strings.HasPrefix(trimmed, "```") {
-			lines = append(lines, "  "+HelpStyle.Render(line))
-			continue
-		}
-
-		// Regular text
-		lines = append(lines, "  "+line)
 	}
 
 	return lines
+}
+
+// splitFrontmatter separates YAML frontmatter (between --- delimiters)
+// from the markdown body. Returns ("", content) if no frontmatter is found.
+func splitFrontmatter(content string) (frontmatter, body string) {
+	if !strings.HasPrefix(content, "---\n") {
+		return "", content
+	}
+
+	end := strings.Index(content[4:], "\n---")
+	if end == -1 {
+		return "", content
+	}
+
+	// Include both --- delimiters in frontmatter
+	fmEnd := 4 + end + 4 // "---\n" + content + "\n---"
+	frontmatter = content[:fmEnd]
+
+	body = content[fmEnd:]
+	body = strings.TrimLeft(body, "\n")
+
+	return frontmatter, body
 }
 
 func (v *KnowledgeView) View() string {
