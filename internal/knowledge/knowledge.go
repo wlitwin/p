@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/walter/p/internal/sanitize"
 )
 
 // Dir returns the absolute path to the knowledge docs directory within a project.
@@ -80,7 +82,7 @@ func Create(projectDir, filename, title string, tags []string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	var sb strings.Builder
 	sb.WriteString("---\n")
-	fmt.Fprintf(&sb, "title: %s\n", title)
+	fmt.Fprintf(&sb, "title: %s\n", sanitize.QuoteYAMLValue(title))
 	fmt.Fprintf(&sb, "created: %s\n", now)
 	fmt.Fprintf(&sb, "updated: %s\n", now)
 	if len(tags) > 0 {

@@ -993,6 +993,70 @@ func TestFindReferencingListsNoTodos(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// YAML frontmatter title sanitization tests
+// ---------------------------------------------------------------------------
+
+func TestCreateWithSpecialCharTitle(t *testing.T) {
+	titles := []struct {
+		filename string
+		title    string
+	}{
+		{"colon-title", "Migration: Phase 2"},
+		{"hash-title", "Issue #42 Fix"},
+		{"bracket-title", "[WIP] New Feature"},
+		{"quote-title", `The "big" refactor`},
+		{"ampersand-title", "R&D Tasks"},
+		{"multi-special", "Step 1: Fix #42 [urgent]"},
+	}
+
+	for _, tt := range titles {
+		t.Run(tt.title, func(t *testing.T) {
+			dir := setupTestProject(t)
+
+			if err := Create(dir, tt.filename, tt.title, []string{"test"}); err != nil {
+				t.Fatalf("Create error: %v", err)
+			}
+
+			content, err := Read(dir, tt.filename)
+			if err != nil {
+				t.Fatalf("Read error: %v", err)
+			}
+
+			// The H1 heading should contain the unquoted title
+			if !strings.Contains(content, "# "+tt.title) {
+				t.Errorf("heading should contain unquoted title %q, got:\n%s", tt.title, content)
+			}
+
+			// For titles with special chars, the YAML frontmatter should be quoted
+			if !strings.Contains(content, `title: "`) {
+				t.Errorf("YAML title should be quoted for %q, got:\n%s", tt.title, content)
+			}
+		})
+	}
+}
+
+func TestCreateWithPlainTitle(t *testing.T) {
+	dir := setupTestProject(t)
+
+	if err := Create(dir, "plain", "Simple Title", nil); err != nil {
+		t.Fatalf("Create error: %v", err)
+	}
+
+	content, err := Read(dir, "plain")
+	if err != nil {
+		t.Fatalf("Read error: %v", err)
+	}
+
+	// Plain titles should NOT be quoted
+	if strings.Contains(content, `title: "`) {
+		t.Errorf("plain title should not be quoted, got:\n%s", content)
+	}
+	if !strings.Contains(content, "title: Simple Title") {
+		t.Errorf("expected plain title line, got:\n%s", content)
+	}
+}
+
 func TestMatchGlobDirectoryPatterns(t *testing.T) {
 	tests := []struct {
 		pattern string

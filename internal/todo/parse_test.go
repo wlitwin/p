@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1088,6 +1089,177 @@ func TestContextRoundTrip(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// YAML frontmatter title sanitization tests
+// ---------------------------------------------------------------------------
+
+func TestRenderQuotesSpecialTitles(t *testing.T) {
+	tests := []struct {
+		name        string
+		title       string
+		wantQuoted  bool // whether the YAML title value should be double-quoted
+	}{
+		{"plain title", "My Tasks", false},
+		{"colon in title", "Migration: Phase 2", true},
+		{"hash in title", "Issue #42 Fix", true},
+		{"brackets in title", "[WIP] New Feature", true},
+		{"curly braces", "{draft} API Design", true},
+		{"ampersand", "R&D Tasks", true},
+		{"asterisk", "Fix *critical* bug", true},
+		{"double quotes", `The "big" refactor`, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			list := &List{
+				Title:   tt.title,
+				Created: time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC),
+				Updated: time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC),
+			}
+			rendered := Render(list)
+
+			if tt.wantQuoted {
+				if !strings.Contains(rendered, `title: "`) {
+					t.Errorf("expected quoted title in YAML, got:\n%s", rendered)
+				}
+			} else {
+				if strings.Contains(rendered, `title: "`) {
+					t.Errorf("expected unquoted title in YAML, got:\n%s", rendered)
+				}
+			}
+		})
+	}
+}
+
+func TestTitleSpecialCharsRoundTrip(t *testing.T) {
+	titles := []string{
+		"Simple Title",
+		"Migration: Phase 2",
+		"Issue #42 Fix",
+		"[WIP] New Feature",
+		`The "big" refactor`,
+		"R&D Tasks",
+		"Fix *critical* bug",
+		"100% complete",
+		"Step 1: Fix #42 [urgent]",
+		"Compare > contrast",
+		"Build | Deploy",
+	}
+
+	for _, title := range titles {
+		t.Run(title, func(t *testing.T) {
+			list := &List{
+				Title:   title,
+				Created: time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC),
+				Updated: time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC),
+			}
+			AddItem(list, "Task", Now, "")
+
+			rendered := Render(list)
+			parsed, err := Parse(rendered)
+			if err != nil {
+				t.Fatalf("Parse(Render()) error: %v", err)
+			}
+
+			if parsed.Title != title {
+				t.Errorf("title round-trip failed: got %q, want %q", parsed.Title, title)
+			}
+		})
+	}
+}
+
+func TestTitleSpecialCharsSaveLoadRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	titles := []string{
+		"Migration: Phase 2",
+		"Issue #42 Fix",
+		"[WIP] New Feature",
+		`The "big" refactor`,
+	}
+
+	for i, title := range titles {
+		listName := fmt.Sprintf("test-%d", i)
+		t.Run(title, func(t *testing.T) {
+			list, err := CreateList(dir, listName, title)
+			if err != nil {
+				t.Fatalf("CreateList error: %v", err)
+			}
+			if list.Title != title {
+				t.Errorf("CreateList title = %q, want %q", list.Title, title)
+			}
+
+			loaded, err := LoadList(dir, listName)
+			if err != nil {
+				t.Fatalf("LoadList error: %v", err)
+			}
+			if loaded.Title != title {
+				t.Errorf("loaded title = %q, want %q", loaded.Title, title)
+			}
+		})
+	}
+}
+
+func TestParseQuotedTitleFromExistingFile(t *testing.T) {
+	// Simulate a file that was saved with a quoted title
+	input := `---
+title: "Migration: Phase 2"
+created: 2026-05-11T12:00:00Z
+updated: 2026-05-11T12:00:00Z
+---
+
+# Migration: Phase 2
+
+- [ ] Run migration priority=now created=2026-05-11
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if list.Title != "Migration: Phase 2" {
+		t.Errorf("title = %q, want %q", list.Title, "Migration: Phase 2")
+	}
+}
+
+func TestParseSingleQuotedTitle(t *testing.T) {
+	// Ensure single-quoted titles are also handled
+	input := `---
+title: 'Deploy: Stage 1'
+created: 2026-05-11T12:00:00Z
+updated: 2026-05-11T12:00:00Z
+---
+
+# Deploy: Stage 1
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if list.Title != "Deploy: Stage 1" {
+		t.Errorf("title = %q, want %q", list.Title, "Deploy: Stage 1")
+	}
+}
+
+func TestParseUnquotedTitleBackwardCompat(t *testing.T) {
+	// Existing files with unquoted plain titles should still work
+	input := `---
+title: DB Refactor
+created: 2026-05-11T12:00:00Z
+updated: 2026-05-11T12:00:00Z
+---
+
+# DB Refactor
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	if list.Title != "DB Refactor" {
+		t.Errorf("title = %q, want %q", list.Title, "DB Refactor")
 	}
 }
 

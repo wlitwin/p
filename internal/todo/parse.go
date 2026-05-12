@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/walter/p/internal/sanitize"
 )
 
 var itemRe = regexp.MustCompile(`^(\s*)- \[([ x\-])\] (.+)$`)
@@ -65,7 +67,7 @@ func parseFrontmatter(list *List, lines []string) {
 
 		switch key {
 		case "title":
-			list.Title = val
+			list.Title = sanitize.UnquoteYAMLValue(val)
 		case "created":
 			if t, err := time.Parse(time.RFC3339, val); err == nil {
 				list.Created = t
@@ -187,7 +189,7 @@ func Render(list *List) string {
 	var sb strings.Builder
 
 	sb.WriteString("---\n")
-	fmt.Fprintf(&sb, "title: %s\n", list.Title)
+	fmt.Fprintf(&sb, "title: %s\n", sanitize.QuoteYAMLValue(list.Title))
 	fmt.Fprintf(&sb, "created: %s\n", list.Created.Format(time.RFC3339))
 	fmt.Fprintf(&sb, "updated: %s\n", list.Updated.Format(time.RFC3339))
 	if list.Context != nil {
