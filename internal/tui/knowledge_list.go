@@ -346,6 +346,13 @@ func (v *KnowledgeListView) View() string {
 		}
 		scrollEnd := min(scrollStart+visibleHeight, len(visible))
 
+		// Adapt name column width to terminal width
+		nameWidth := 30
+		if v.width > 0 && v.width < 80 {
+			nameWidth = max(16, v.width/3)
+		}
+		showTags := v.width == 0 || v.width >= 60
+
 		for i := scrollStart; i < scrollEnd; i++ {
 			doc := visible[i]
 
@@ -355,23 +362,27 @@ func (v *KnowledgeListView) View() string {
 			}
 
 			name := doc.Name
+			displayName := name
+			if len(displayName) > nameWidth {
+				displayName = displayName[:nameWidth-1] + "…"
+			}
 			if v.cursor == i {
-				name = SelectedStyle.Render(name)
+				displayName = SelectedStyle.Render(displayName)
 			}
 
 			// File size
 			sizeStr := formatSize(doc.Size)
 
-			// Tags
+			// Tags (hidden on narrow terminals)
 			tagStr := ""
-			if len(doc.Tags) > 0 {
+			if showTags && len(doc.Tags) > 0 {
 				tagStr = HelpStyle.Render(strings.Join(doc.Tags, ", "))
 			}
 
-			padding := max(2, 30-len(doc.Name))
+			padding := max(2, nameWidth-len(name))
 			sizePad := max(2, 10-len(sizeStr))
 
-			fmt.Fprintf(&sb, "%s%s%s%s%s%s\n", cursor, name, spaces(padding),
+			fmt.Fprintf(&sb, "%s%s%s%s%s%s\n", cursor, displayName, spaces(padding),
 				HelpStyle.Render(sizeStr), spaces(sizePad), tagStr)
 		}
 	}

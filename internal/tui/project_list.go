@@ -123,18 +123,18 @@ func (v *ProjectListView) View() string {
 	s := title + "\n\n"
 
 	// Calculate visible area for scrolling
-	visibleHeight := v.height - 5
-	if visibleHeight < 3 {
-		visibleHeight = 3
-	}
+	visibleHeight := max(3, v.height-5)
 
 	scrollStart := 0
 	if v.cursor >= visibleHeight {
 		scrollStart = v.cursor - visibleHeight + 1
 	}
-	scrollEnd := scrollStart + visibleHeight
-	if scrollEnd > len(v.projects) {
-		scrollEnd = len(v.projects)
+	scrollEnd := min(scrollStart+visibleHeight, len(v.projects))
+
+	// Adapt name column width to terminal width
+	nameWidth := 20
+	if v.width > 0 && v.width < 60 {
+		nameWidth = max(12, v.width/3)
 	}
 
 	for i := scrollStart; i < scrollEnd; i++ {
@@ -148,20 +148,20 @@ func (v *ProjectListView) View() string {
 		counts := formatCounts(p.Open, p.Done, p.Blocked)
 
 		name := p.Name
+		displayName := name
+		if len(displayName) > nameWidth {
+			displayName = displayName[:nameWidth-1] + "…"
+		}
 		if v.cursor == i {
-			name = SelectedStyle.Render(name)
+			displayName = SelectedStyle.Render(displayName)
 		}
 
-		padding := 20 - len(p.Name)
-		if padding < 2 {
-			padding = 2
-		}
-		pad := spaces(padding)
+		padding := max(2, nameWidth-len(name))
 
-		s += fmt.Sprintf("%s%s%s%s\n", cursor, name, pad, counts)
+		s += fmt.Sprintf("%s%s%s%s\n", cursor, displayName, spaces(padding), counts)
 	}
 
-	s += "\n" + HelpStyle.Render("  ↑↓ navigate  Enter select  q quit  ? help")
+	s += "\n" + HelpStyle.Render("  ↑↓ navigate  Enter select  S status  q quit  ? help")
 
 	return s
 }

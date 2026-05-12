@@ -135,6 +135,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "?":
 				a.showHelp = !a.showHelp
 				return a, nil
+			case "S":
+				// Jump to status view from any context
+				return a, func() tea.Msg {
+					return NavigateMsg{To: ViewStatus}
+				}
 			}
 		}
 
@@ -247,6 +252,8 @@ func (a *App) navigate(msg NavigateMsg) tea.Cmd {
 		a.activeView = NewKnowledgeView(a.projectName, a.projectDir, msg.DocName, a.width, ch)
 	case ViewSearch:
 		a.activeView = NewSearchView(a.projectName, a.projectDir, a.width, ch)
+	case ViewStatus:
+		a.activeView = NewStatusView(a.projectRoot, a.projectName, a.projectDir, a.width, ch)
 	default:
 		return nil
 	}
@@ -321,39 +328,8 @@ func (a *App) View() string {
 }
 
 func (a *App) renderHelp() string {
-	help := TitleStyle.Render("Keyboard Shortcuts") + "\n\n"
-
-	help += "  " + TitleStyle.Render("Global") + "\n"
-	help += HelpStyle.Render("    q/Ctrl+C  quit        Esc  back        ?  toggle help") + "\n\n"
-
-	help += "  " + TitleStyle.Render("Navigation") + "\n"
-	help += HelpStyle.Render("    ↑/k  up    ↓/j  down    Enter  select") + "\n\n"
-
-	help += "  " + TitleStyle.Render("Item List") + "\n"
-	help += HelpStyle.Render("    Space/d  toggle done  o  open    b  block    x  done") + "\n"
-	help += HelpStyle.Render("    p  cycle priority     n  new item    e  edit text") + "\n"
-	help += HelpStyle.Render("    D  due date   t  tags   m  move to list   r  remove") + "\n"
-	help += HelpStyle.Render("    f  cycle filter  0-3  filter by state  P  priority filter") + "\n"
-	help += HelpStyle.Render("    Enter  open item detail") + "\n\n"
-
-	help += "  " + TitleStyle.Render("Item Detail") + "\n"
-	help += HelpStyle.Render("    d  toggle done  o/b/x  state  p  priority") + "\n"
-	help += HelpStyle.Render("    e  edit text  D  due date  t  tags  ↑↓  scroll") + "\n\n"
-
-	help += "  " + TitleStyle.Render("Todo Lists") + "\n"
-	help += HelpStyle.Render("    Tab  switch to knowledge  /  search") + "\n\n"
-
-	help += "  " + TitleStyle.Render("Knowledge") + "\n"
-	help += HelpStyle.Render("    Enter  view doc    Tab  switch to todos") + "\n"
-	help += HelpStyle.Render("    /  search/filter   n  new doc") + "\n\n"
-
-	help += "  " + TitleStyle.Render("Knowledge Viewer") + "\n"
-	help += HelpStyle.Render("    ↑↓  scroll  PgUp/PgDn  half-page  g/G  top/bottom") + "\n\n"
-
-	help += "  " + TitleStyle.Render("Search") + "\n"
-	help += HelpStyle.Render("    Type to search  ↑↓  navigate  Enter  jump to result") + "\n\n"
-
-	help += HelpStyle.Render("  Press any key to close")
+	vt := activeViewType(a.activeView)
+	help := renderContextHelp(vt)
 
 	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center,
 		BorderStyle.Render(help))

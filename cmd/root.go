@@ -54,6 +54,14 @@ var rootCmd = &cobra.Command{
 	Use:     "p",
 	Short:   "Project knowledge & task manager",
 	Version: Version,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// When running bare `p` with no subcommand, launch TUI if interactive
+		if isInteractive() && cfg.ProjectRoot != "" {
+			return uiCmd.RunE(cmd, args)
+		}
+		// Fall back to showing help
+		return cmd.Help()
+	},
 }
 
 func Execute() {
@@ -81,6 +89,19 @@ func loadConfig() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading config: %v\n", err)
 	}
+}
+
+// isInteractive returns true if stdin and stdout are both terminals.
+func isInteractive() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	fo, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode()&os.ModeCharDevice) != 0 && (fo.Mode()&os.ModeCharDevice) != 0
 }
 
 func requireProjectRoot() error {
