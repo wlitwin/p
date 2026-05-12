@@ -11,16 +11,19 @@ import (
 )
 
 var planCmd = &cobra.Command{
-	Use:   "plan <project> <description>",
+	Use:   "plan <project> [description]",
 	Short: "Open-ended AI planning — create multiple todos, update knowledge",
 	Long: `Give the AI an open-ended task and let it explore the project,
 create multiple todos, organize knowledge, and plan work.
 
+If no description is provided, starts an interactive planning session with
+full project context pre-loaded.
+
 Examples:
   p plan serviceA "Write up v2 TODOs — v1 is complete"
   p plan serviceA "Break down the auth migration into concrete tasks"
-  p plan serviceA "Review the current state and suggest what's missing"`,
-	Args: cobra.ExactArgs(2),
+  p plan serviceA                                          # interactive session`,
+	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireProjectRoot(); err != nil {
 			return err
@@ -28,6 +31,11 @@ Examples:
 		also, _ := cmd.Flags().GetStringSlice("also")
 		listName, _ := cmd.Flags().GetString("list")
 		cont, _ := cmd.Flags().GetBool("continue")
+
+		input := ""
+		if len(args) >= 2 {
+			input = args[1]
+		}
 
 		// Resolve context patterns from the target list if specified
 		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
@@ -46,12 +54,17 @@ Examples:
 			contextPatterns = ai.ResolveContext(dir, nil)
 		}
 
+		commitMsg := "p: AI interactive planning session"
+		if input != "" {
+			commitMsg = fmt.Sprintf("p: AI plan — %s", display.Truncate(input, 60))
+		}
+
 		return runAIWithCommit(cmd.Context(), aiTaskConfig{
 			ProjectName:     args[0],
-			Input:           args[1],
+			Input:           input,
 			Mode:            ai.ModePlan,
 			CommandName:     "plan",
-			CommitMsg:       fmt.Sprintf("p: AI plan — %s", display.Truncate(args[1], 60)),
+			CommitMsg:       commitMsg,
 			Continue:        cont,
 			AlsoNames:       also,
 			ContextPatterns: contextPatterns,

@@ -481,9 +481,9 @@ func TestIntegrationFilterItems(t *testing.T) {
 	if len(filtered) != 2 {
 		t.Errorf("filter state=open: expected 2 items, got %d", len(filtered))
 	}
-	for _, item := range filtered {
-		if item.State != todo.Open {
-			t.Errorf("filter state=open: got item with state %q", item.State)
+	for _, fi := range filtered {
+		if fi.Item.State != todo.Open {
+			t.Errorf("filter state=open: got item with state %q", fi.Item.State)
 		}
 	}
 
@@ -492,9 +492,9 @@ func TestIntegrationFilterItems(t *testing.T) {
 	if len(filtered) != 2 {
 		t.Errorf("filter priority=backlog: expected 2 items, got %d", len(filtered))
 	}
-	for _, item := range filtered {
-		if item.Priority != todo.Backlog {
-			t.Errorf("filter priority=backlog: got item with priority %q", item.Priority)
+	for _, fi := range filtered {
+		if fi.Item.Priority != todo.Backlog {
+			t.Errorf("filter priority=backlog: got item with priority %q", fi.Item.Priority)
 		}
 	}
 
@@ -503,14 +503,27 @@ func TestIntegrationFilterItems(t *testing.T) {
 	if len(filtered) != 1 {
 		t.Errorf("filter tag=bug: expected 1 item, got %d", len(filtered))
 	}
-	if len(filtered) > 0 && filtered[0].Text != "Open backlog task" {
-		t.Errorf("filter tag=bug: wrong item %q", filtered[0].Text)
+	if len(filtered) > 0 && filtered[0].Item.Text != "Open backlog task" {
+		t.Errorf("filter tag=bug: wrong item %q", filtered[0].Item.Text)
 	}
 
 	// No filter — all items returned
 	filtered = display.FilterItems(items, "", "", "")
 	if len(filtered) != 4 {
 		t.Errorf("no filter: expected 4 items, got %d", len(filtered))
+	}
+
+	// Verify original IDs are preserved when filtering
+	filtered = display.FilterItems(items, "open", "", "")
+	if len(filtered) != 2 {
+		t.Fatalf("filter state=open: expected 2 items, got %d", len(filtered))
+	}
+	// Items at positions 1 and 4 are open (1-based)
+	if filtered[0].OriginalID != "1" {
+		t.Errorf("first open item: OriginalID = %q, want %q", filtered[0].OriginalID, "1")
+	}
+	if filtered[1].OriginalID != "4" {
+		t.Errorf("second open item: OriginalID = %q, want %q", filtered[1].OriginalID, "4")
 	}
 }
 

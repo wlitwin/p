@@ -2,6 +2,7 @@ package display
 
 import (
 	"testing"
+	"time"
 
 	"github.com/walter/p/internal/todo"
 )
@@ -45,11 +46,133 @@ func TestFilterItems(t *testing.T) {
 	}
 }
 
-func TestFilterItemsReturnsOriginalSliceWhenNoFilters(t *testing.T) {
+func TestFilterItemsPreservesOriginalIDs(t *testing.T) {
+	items := []*todo.Item{
+		{Text: "done task", State: todo.Done, Priority: todo.Now},
+		{Text: "open task 1", State: todo.Open, Priority: todo.Now},
+		{Text: "done task 2", State: todo.Done, Priority: todo.Now},
+		{Text: "open task 2", State: todo.Open, Priority: todo.Now},
+		{Text: "open task 3", State: todo.Open, Priority: todo.Now},
+	}
+
+	got := FilterItems(items, "open", "", "")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 open items, got %d", len(got))
+	}
+
+	// Items should have original IDs 2, 4, 5 (not 1, 2, 3)
+	wantIDs := []string{"2", "4", "5"}
+	for i, fi := range got {
+		if fi.OriginalID != wantIDs[i] {
+			t.Errorf("filtered item %d: OriginalID = %q, want %q", i, fi.OriginalID, wantIDs[i])
+		}
+	}
+}
+
+func TestFilterItemsPreservesChildIDs(t *testing.T) {
+	items := []*todo.Item{
+		{Text: "done parent", State: todo.Done, Priority: todo.Now},
+		{Text: "open parent", State: todo.Open, Priority: todo.Now, Children: []*todo.Item{
+			{Text: "done child", State: todo.Done, Priority: todo.Now},
+			{Text: "open child", State: todo.Open, Priority: todo.Now},
+		}},
+		{Text: "another parent", State: todo.Done, Priority: todo.Now, Children: []*todo.Item{
+			{Text: "open nested", State: todo.Open, Priority: todo.Now},
+		}},
+	}
+
+	got := FilterItems(items, "open", "", "")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 open items, got %d", len(got))
+	}
+
+	// Should be: parent at "2", child at "2.2", and nested at "3.1"
+	wantIDs := []string{"2", "2.2", "3.1"}
+	for i, fi := range got {
+		if fi.OriginalID != wantIDs[i] {
+			t.Errorf("filtered item %d: OriginalID = %q, want %q", i, fi.OriginalID, wantIDs[i])
+		}
+	}
+}
+
+func TestFilterItemsNoFilterReturnsAll(t *testing.T) {
 	items := []*todo.Item{{Text: "a"}, {Text: "b"}}
 	got := FilterItems(items, "", "", "")
-	if &got[0] != &items[0] {
-		t.Error("FilterItems with no filters should return the original slice")
+	if len(got) != 2 {
+		t.Errorf("no filter: expected 2 items, got %d", len(got))
+	}
+	if got[0].Item != items[0] || got[1].Item != items[1] {
+		t.Error("FilterItems with no filters should return the original items")
+	}
+}
+
+func TestDueFilter(t *testing.T) {
+	today := time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)
+
+	items := []*todo.Item{
+		{Text: "overdue task", State: todo.Open, Due: "2026-05-09"},
+		{Text: "due today", State: todo.Open, Due: "2026-05-11"},
+		{Text: "due tomorrow", State: todo.Open, Due: "2026-05-12"},
+		{Text: "due next week", State: todo.Open, Due: "2026-05-18"},
+		{Text: "due next month", State: todo.Open, Due: "2026-06-05"},
+		{Text: "no due date", State: todo.Open},
+		{Text: "overdue but done", State: todo.Done, Due: "2026-05-01"},
+	}
+
+	tests := []struct {
+		name     string
+		dueRange string
+		want     int
+		wantIDs  []string
+	}{
+		{"today", "today", 1, []string{"2"}},
+		{"overdue", "overdue", 1, []string{"1"}},          // done items excluded
+		{"week", "week", 3, []string{"2", "3", "4"}},      // today + tomorrow + next week (within 7 days)
+		{"month", "month", 4, []string{"2", "3", "4", "5"}},
+		{"none", "none", 1, []string{"6"}},
+		{"specific date", "2026-05-12", 1, []string{"3"}},
+		{"no match", "2026-12-25", 0, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DueFilter(items, tt.dueRange, today)
+			if len(got) != tt.want {
+				t.Errorf("DueFilter(%q) returned %d items, want %d", tt.dueRange, len(got), tt.want)
+				for _, fi := range got {
+					t.Logf("  got: %s (due=%s, state=%s)", fi.Item.Text, fi.Item.Due, fi.Item.State)
+				}
+				return
+			}
+			for i, fi := range got {
+				if i < len(tt.wantIDs) && fi.OriginalID != tt.wantIDs[i] {
+					t.Errorf("item %d: OriginalID = %q, want %q", i, fi.OriginalID, tt.wantIDs[i])
+				}
+			}
+		})
+	}
+}
+
+func TestDueFilterWithChildren(t *testing.T) {
+	today := time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)
+
+	items := []*todo.Item{
+		{Text: "parent no due", State: todo.Open, Children: []*todo.Item{
+			{Text: "child due today", State: todo.Open, Due: "2026-05-11"},
+			{Text: "child no due", State: todo.Open},
+		}},
+		{Text: "parent due today", State: todo.Open, Due: "2026-05-11"},
+	}
+
+	got := DueFilter(items, "today", today)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 items due today, got %d", len(got))
+	}
+	if got[0].OriginalID != "1.1" {
+		t.Errorf("first match: OriginalID = %q, want %q", got[0].OriginalID, "1.1")
+	}
+	if got[1].OriginalID != "2" {
+		t.Errorf("second match: OriginalID = %q, want %q", got[1].OriginalID, "2")
 	}
 }
 

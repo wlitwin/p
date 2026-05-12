@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -10,19 +11,19 @@ import (
 )
 
 var howCmd = &cobra.Command{
-	Use:   "how <question...>",
+	Use:   "how [question...]",
 	Short: "Ask the AI how to do something with p",
 	Long: `Ask a natural language question about how to use p and get
 a helpful answer with the right commands.
 
+If no question is provided, starts an interactive help session.
+
 Examples:
   p how do I move items between lists
   p how to set up a new project with a code repo
-  p how can I search for todos tagged as bugs`,
-	Args: cobra.MinimumNArgs(1),
+  p how                                           # interactive help session`,
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		question := strings.Join(args, " ")
-
 		claudePath := cfg.ClaudePath
 		if claudePath == "" {
 			claudePath = "claude"
@@ -33,6 +34,27 @@ Examples:
 		}
 
 		helpText := buildHelpPrompt()
+
+		// Interactive mode when no question provided
+		if len(args) == 0 {
+			claudeArgs := []string{
+				"--system-prompt", helpText,
+				"--no-session-persistence",
+				"--model", model,
+			}
+
+			claudeCmd := exec.Command(claudePath, claudeArgs...)
+			claudeCmd.Stdin = os.Stdin
+			claudeCmd.Stdout = os.Stdout
+			claudeCmd.Stderr = os.Stderr
+
+			if err := claudeCmd.Run(); err != nil {
+				return fmt.Errorf("claude interactive session failed: %w", err)
+			}
+			return nil
+		}
+
+		question := strings.Join(args, " ")
 
 		claudeArgs := []string{
 			"--print",
@@ -72,17 +94,18 @@ func buildHelpPrompt() string {
 		{"p add <project> [list] '<text>' [--ai] [-k] [-l LIST] [--priority now|backlog] [--due YYYY-MM-DD]", "Add a todo item or knowledge entry"},
 		{"p list", "List projects (shows path, created/updated dates)"},
 		{"p list <project>", "List todo lists and knowledge docs in a project"},
-		{"p list <project> <list|all> [--state open|blocked|done] [--priority now|backlog] [--tag TAG]", "List items with optional filters (use 'all' for all lists)"},
+		{"p list <project> <list|all> [--state open|blocked|done] [--priority now|backlog] [--tag TAG] [--due today|overdue|week|month|YYYY-MM-DD]", "List items with optional filters (use 'all' for all lists)"},
 		{"p show <project> <list-or-doc> [-k]", "Show a todo list or knowledge document"},
 		{"p status [project]", "Show open/blocked/done counts"},
 		{"p done <project> <list> <id> [id...]", "Mark items done (supports multiple IDs)"},
 		{"p search [project] <query>", "Full-text search across todos and knowledge"},
+		{"p due <project> [today|overdue|week|month|YYYY-MM-DD]", "Cross-list view of items by due date (default: today + overdue)"},
 		{"p do <project> [list] [ids...] [-m 'message']", "Have AI implement todo items in the code repo"},
 		{"p agent <project> <list> [-i MAX] [-m 'message']", "Autonomous agent loop — works through a todo list until done"},
-		{"p plan <project> '<description>' [--also=other-project]", "Open-ended AI planning — creates multiple todos/knowledge"},
-		{"p ask <project> '<question>' [-c]", "Ask the AI about project state (read-only). -c continues last conversation"},
+		{"p plan <project> ['<description>'] [--also=other-project]", "Open-ended AI planning (interactive if no description)"},
+		{"p ask <project> ['<question>'] [-c]", "Ask the AI about project state (read-only, interactive if no question). -c continues last conversation"},
 		{"p save <project> [message...]", "Commit manual edits (Obsidian, text editor)"},
-		{"p how <question>", "This command — ask how to do something"},
+		{"p how [question]", "This command — ask how to do something (interactive if no question)"},
 		{"p aliases [bash|zsh|fish]", "Print shell aliases (eval \"$(p aliases)\" in your profile)"},
 		{"p init", "Set up p — configure project root directory"},
 		{"p config [key] [value]", "View or set global config (project_root, claude_path, claude_model)"},

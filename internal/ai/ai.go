@@ -123,6 +123,9 @@ type RunOptions struct {
 // Run starts the claude CLI subprocess to execute an AI task. The provided
 // context controls cancellation — when ctx is cancelled the subprocess
 // receives a SIGKILL and Run returns the context error.
+//
+// When task.Input is empty, claude is launched in interactive mode (no --print
+// flag), connecting stdin/stdout/stderr directly so the user can type queries.
 func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, opts ...RunOptions) error {
 	var opt RunOptions
 	if len(opts) > 0 {
@@ -142,6 +145,11 @@ func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, op
 	mcpJSON, err := json.Marshal(mcpCfg)
 	if err != nil {
 		return fmt.Errorf("marshaling MCP config: %w", err)
+	}
+
+	// Interactive mode: no --print, connect terminal directly
+	if task.Input == "" {
+		return runInteractive(ctx, claudeBinary, model, prompt, string(mcpJSON), task.ProjectName, opt)
 	}
 
 	args := []string{
@@ -187,6 +195,33 @@ func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, op
 	}
 
 	fmt.Fprintf(os.Stderr, "AI agent finished.\n")
+	return nil
+}
+
+// runInteractive launches claude in interactive (chat) mode with system prompt
+// and MCP config but no --print flag, allowing the user to type directly.
+func runInteractive(ctx context.Context, claudeBinary, model, prompt, mcpJSON, projectName string, opt RunOptions) error {
+	args := []string{
+		"--system-prompt", prompt,
+		"--mcp-config", mcpJSON,
+		"--tools", "mcp,WebFetch,WebSearch",
+		"--dangerously-skip-permissions",
+		"--model", model,
+		"--name", fmt.Sprintf("p-%s", projectName),
+	}
+
+	if opt.Continue {
+		args = append(args, "--continue")
+	}
+
+	cmd := exec.CommandContext(ctx, claudeBinary, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("claude interactive session failed: %w", err)
+	}
 	return nil
 }
 
@@ -424,7 +459,11 @@ func todoInstructions(task Task) string {
 func planInstructions(task Task) string {
 	var sb strings.Builder
 
-	fmt.Fprintf(&sb, "The user has given you this open-ended task:\n\n> %s\n\n", task.Input)
+	if task.Input != "" {
+		fmt.Fprintf(&sb, "The user has given you this open-ended task:\n\n> %s\n\n", task.Input)
+	} else {
+		sb.WriteString("The user is starting an interactive planning session.\n\n")
+	}
 
 	sb.WriteString("You have full freedom to explore the project state and make multiple changes.\n\n")
 
@@ -447,16 +486,20 @@ func planInstructions(task Task) string {
 func askInstructions(task Task) string {
 	var sb strings.Builder
 
-	fmt.Fprintf(&sb, "The user has a question about this project:\n\n> %s\n\n", task.Input)
+	if task.Input != "" {
+		fmt.Fprintf(&sb, "The user has a question about this project:\n\n> %s\n\n", task.Input)
+	} else {
+		sb.WriteString("The user is starting an interactive Q&A session about this project.\n\n")
+	}
 
 	sb.WriteString("This is a READ-ONLY query. Do NOT create, modify, or delete any todos or knowledge docs.\n\n")
 	sb.WriteString("Guidelines:\n")
 	sb.WriteString("- Use `project_list`, `todo_list`, and `knowledge_read` to explore the project.\n")
-	sb.WriteString("- Answer the question based on the current project state.\n")
+	sb.WriteString("- Answer questions based on the current project state.\n")
 	sb.WriteString("- Be specific — reference actual todo items, lists, and knowledge docs by name.\n")
 	sb.WriteString("- If the question is about progress, summarize what's done vs. open vs. blocked.\n")
 	sb.WriteString("- If the question is about gaps or risks, analyze the current state critically.\n")
-	sb.WriteString("- Keep your answer concise and actionable.\n")
+	sb.WriteString("- Keep your answers concise and actionable.\n")
 
 	return sb.String()
 }

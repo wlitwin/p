@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/display"
@@ -147,23 +148,45 @@ func listAllItems(projectName string, cmd *cobra.Command) error {
 	stateFilter, _ := cmd.Flags().GetString("state")
 	priorityFilter, _ := cmd.Flags().GetString("priority")
 	tagFilter, _ := cmd.Flags().GetString("tag")
+	dueFilter, _ := cmd.Flags().GetString("due")
 
-	for i, name := range names {
+	hasFilter := stateFilter != "" || priorityFilter != "" || tagFilter != ""
+	first := true
+	for _, name := range names {
 		list, err := todo.LoadList(dir, name)
 		if err != nil {
 			continue
 		}
 
-		filtered := display.FilterItems(list.Items, stateFilter, priorityFilter, tagFilter)
-		if len(filtered) == 0 {
-			continue
+		var filtered []display.FilteredItem
+		if dueFilter != "" {
+			filtered = display.DueFilter(list.Items, dueFilter, time.Now())
+			// Also apply state/priority/tag filters on top
+			if hasFilter {
+				filtered = applyExtraFilters(filtered, stateFilter, priorityFilter, tagFilter)
+			}
+		} else if hasFilter {
+			filtered = display.FilterItems(list.Items, stateFilter, priorityFilter, tagFilter)
 		}
 
-		if i > 0 {
-			fmt.Println()
+		if dueFilter != "" || hasFilter {
+			if len(filtered) == 0 {
+				continue
+			}
+			if !first {
+				fmt.Println()
+			}
+			first = false
+			fmt.Printf("%s\n\n", tui.Bold.Render("# "+name))
+			display.PrintFilteredItems(filtered, dir)
+		} else {
+			if !first {
+				fmt.Println()
+			}
+			first = false
+			fmt.Printf("%s\n\n", tui.Bold.Render("# "+name))
+			display.PrintItems(list.Items, "", 1, dir)
 		}
-		fmt.Printf("%s\n\n", tui.Bold.Render("# "+name))
-		display.PrintItems(filtered, "", 1, dir)
 	}
 	return nil
 }
@@ -182,12 +205,45 @@ func listItems(projectName, listName string, cmd *cobra.Command) error {
 	stateFilter, _ := cmd.Flags().GetString("state")
 	priorityFilter, _ := cmd.Flags().GetString("priority")
 	tagFilter, _ := cmd.Flags().GetString("tag")
+	dueFilter, _ := cmd.Flags().GetString("due")
 
-	filtered := display.FilterItems(list.Items, stateFilter, priorityFilter, tagFilter)
+	hasFilter := stateFilter != "" || priorityFilter != "" || tagFilter != ""
 
 	fmt.Printf("# %s\n\n", list.Title)
-	display.PrintItems(filtered, "", 1, dir)
+	if dueFilter != "" {
+		filtered := display.DueFilter(list.Items, dueFilter, time.Now())
+		if hasFilter {
+			filtered = applyExtraFilters(filtered, stateFilter, priorityFilter, tagFilter)
+		}
+		display.PrintFilteredItems(filtered, dir)
+	} else if hasFilter {
+		filtered := display.FilterItems(list.Items, stateFilter, priorityFilter, tagFilter)
+		display.PrintFilteredItems(filtered, dir)
+	} else {
+		display.PrintItems(list.Items, "", 1, dir)
+	}
 	return nil
+}
+
+// applyExtraFilters applies state/priority/tag filters on already-filtered items.
+func applyExtraFilters(items []display.FilteredItem, state, priority, tag string) []display.FilteredItem {
+	if state == "" && priority == "" && tag == "" {
+		return items
+	}
+	var result []display.FilteredItem
+	for _, fi := range items {
+		if state != "" && string(fi.Item.State) != state {
+			continue
+		}
+		if priority != "" && string(fi.Item.Priority) != priority {
+			continue
+		}
+		if tag != "" && !display.HasTag(fi.Item, tag) {
+			continue
+		}
+		result = append(result, fi)
+	}
+	return result
 }
 
 func init() {
@@ -195,5 +251,6 @@ func init() {
 	listCmd.Flags().String("state", "", "Filter by state: open, blocked, done")
 	listCmd.Flags().String("priority", "", "Filter by priority: now, backlog")
 	listCmd.Flags().String("tag", "", "Filter by tag")
+	listCmd.Flags().String("due", "", "Filter by due date: today, overdue, week, month, or YYYY-MM-DD")
 	rootCmd.AddCommand(listCmd)
 }
