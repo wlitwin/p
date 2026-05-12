@@ -12,7 +12,7 @@ var (
 
 	// Item state styles
 	OpenStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))  // white
-	DoneStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("242")) // dim gray
+	DoneStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("246")) // gray (readable)
 	BlockedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("208")) // orange
 
 	// Priority styles
@@ -24,7 +24,7 @@ var (
 			Background(lipgloss.Color("62")).
 			Foreground(lipgloss.Color("15"))
 	TitleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
-	HelpStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	HelpStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	ErrorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	StatusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	CursorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))

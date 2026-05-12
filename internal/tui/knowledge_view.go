@@ -156,7 +156,7 @@ func getGlamourRenderer(wordWrap int) *glamour.TermRenderer {
 	}
 
 	r, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle("dark"),
+		glamourStyleOption(),
 		glamour.WithWordWrap(wordWrap),
 	)
 	if err != nil {
@@ -173,6 +173,21 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+// glamourStyleOption returns the appropriate glamour rendering option based on
+// the GlamourThemeSetting configured by the theme system.
+func glamourStyleOption() glamour.TermRendererOption {
+	switch GlamourThemeSetting {
+	case "dark":
+		return glamour.WithStandardStyle("dark")
+	case "light":
+		return glamour.WithStandardStyle("light")
+	case "notty":
+		return glamour.WithStandardStyle("notty")
+	default:
+		return glamour.WithAutoStyle()
+	}
 }
 
 // renderMarkdownContent renders markdown content using glamour for proper

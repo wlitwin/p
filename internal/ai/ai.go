@@ -17,6 +17,7 @@ import (
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/tui"
 )
 
 // Task describes an AI operation to perform, including the target project,
@@ -270,6 +271,21 @@ func processStreamLine(line string) {
 	}
 }
 
+// glamourStyleOption returns the glamour rendering option based on the
+// theme system's GlamourThemeSetting.
+func glamourStyleOption() glamour.TermRendererOption {
+	switch tui.GlamourThemeSetting {
+	case "dark":
+		return glamour.WithStandardStyle("dark")
+	case "light":
+		return glamour.WithStandardStyle("light")
+	case "notty":
+		return glamour.WithStandardStyle("notty")
+	default:
+		return glamour.WithAutoStyle()
+	}
+}
+
 var mdRenderer *glamour.TermRenderer
 
 // RenderMarkdown renders markdown text to styled terminal output using glamour.
@@ -278,7 +294,7 @@ func RenderMarkdown(text string) (string, error) {
 	if mdRenderer == nil {
 		var err error
 		mdRenderer, err = glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
+			glamourStyleOption(),
 			glamour.WithWordWrap(100),
 		)
 		if err != nil {

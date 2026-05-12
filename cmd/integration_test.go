@@ -15,7 +15,9 @@ import (
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/service"
+	"github.com/walter/p/internal/theme"
 	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/tui"
 	"github.com/walter/p/internal/validate"
 )
 
@@ -608,6 +610,203 @@ func TestIntegrationConfigGetSet(t *testing.T) {
 	err = setConfigKey("nonexistent_key", "value")
 	if err == nil {
 		t.Error("setConfigKey should return error for invalid key")
+	}
+}
+
+func TestIntegrationThemeConfigRoundTrip(t *testing.T) {
+	setupIntegrationTest(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	// Set theme and verify it persists
+	err := setConfigKey("theme", "high-contrast")
+	if err != nil {
+		t.Fatalf("setConfigKey theme: %v", err)
+	}
+	if cfg.Theme != "high-contrast" {
+		t.Errorf("after set, theme = %q, want 'high-contrast'", cfg.Theme)
+	}
+
+	// Get theme
+	val, err := getConfigValue("theme")
+	if err != nil {
+		t.Fatalf("getConfigValue theme: %v", err)
+	}
+	if val != "high-contrast" {
+		t.Errorf("getConfigValue theme = %q, want 'high-contrast'", val)
+	}
+
+	// Set invalid theme
+	err = setConfigKey("theme", "nonexistent")
+	if err == nil {
+		t.Error("setConfigKey should reject invalid theme")
+	}
+
+	// Set light theme
+	err = setConfigKey("theme", "light")
+	if err != nil {
+		t.Fatalf("setConfigKey theme light: %v", err)
+	}
+	if cfg.Theme != "light" {
+		t.Errorf("after set, theme = %q, want 'light'", cfg.Theme)
+	}
+
+	// Set glamour_theme
+	err = setConfigKey("glamour_theme", "dark")
+	if err != nil {
+		t.Fatalf("setConfigKey glamour_theme: %v", err)
+	}
+	if cfg.GlamourTheme != "dark" {
+		t.Errorf("after set, glamour_theme = %q, want 'dark'", cfg.GlamourTheme)
+	}
+
+	// Set invalid glamour_theme
+	err = setConfigKey("glamour_theme", "invalid")
+	if err == nil {
+		t.Error("setConfigKey should reject invalid glamour_theme")
+	}
+
+	// Get glamour_theme
+	val, err = getConfigValue("glamour_theme")
+	if err != nil {
+		t.Fatalf("getConfigValue glamour_theme: %v", err)
+	}
+	if val != "dark" {
+		t.Errorf("getConfigValue glamour_theme = %q, want 'dark'", val)
+	}
+
+	// Default values when not set
+	cfg.Theme = ""
+	cfg.GlamourTheme = ""
+	val, err = getConfigValue("theme")
+	if err != nil {
+		t.Fatalf("getConfigValue empty theme: %v", err)
+	}
+	if val != "default" {
+		t.Errorf("empty theme should report 'default', got %q", val)
+	}
+	val, err = getConfigValue("glamour_theme")
+	if err != nil {
+		t.Fatalf("getConfigValue empty glamour_theme: %v", err)
+	}
+	if val != "auto" {
+		t.Errorf("empty glamour_theme should report 'auto', got %q", val)
+	}
+}
+
+func TestIntegrationColorConfigRoundTrip(t *testing.T) {
+	setupIntegrationTest(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	// Set individual color override
+	err := setConfigKey("colors.dim", "248")
+	if err != nil {
+		t.Fatalf("setConfigKey colors.dim: %v", err)
+	}
+	if cfg.Colors.Dim != "248" {
+		t.Errorf("after set, colors.dim = %q, want '248'", cfg.Colors.Dim)
+	}
+
+	// Get color override
+	val, err := getConfigValue("colors.dim")
+	if err != nil {
+		t.Fatalf("getConfigValue colors.dim: %v", err)
+	}
+	if val != "248" {
+		t.Errorf("getConfigValue colors.dim = %q, want '248'", val)
+	}
+
+	// Set another color override
+	err = setConfigKey("colors.help", "250")
+	if err != nil {
+		t.Fatalf("setConfigKey colors.help: %v", err)
+	}
+	if cfg.Colors.Help != "250" {
+		t.Errorf("after set, colors.help = %q, want '250'", cfg.Colors.Help)
+	}
+
+	// Set hex color
+	err = setConfigKey("colors.accent", "#7C6F64")
+	if err != nil {
+		t.Fatalf("setConfigKey colors.accent: %v", err)
+	}
+	if cfg.Colors.Accent != "#7C6F64" {
+		t.Errorf("after set, colors.accent = %q, want '#7C6F64'", cfg.Colors.Accent)
+	}
+
+	// Clear a color override (set to empty)
+	err = setConfigKey("colors.dim", "")
+	if err != nil {
+		t.Fatalf("setConfigKey colors.dim empty: %v", err)
+	}
+	if cfg.Colors.Dim != "" {
+		t.Errorf("after clear, colors.dim = %q, want ''", cfg.Colors.Dim)
+	}
+
+	// Invalid color key
+	err = setConfigKey("colors.nonexistent", "248")
+	if err == nil {
+		t.Error("setConfigKey should reject unknown color key")
+	}
+
+	// Get invalid color key
+	_, err = getConfigValue("colors.nonexistent")
+	if err == nil {
+		t.Error("getConfigValue should reject unknown color key")
+	}
+
+	// Test all valid color keys
+	colorKeys := []string{
+		"dim", "done", "help", "accent", "open",
+		"green", "yellow", "red", "cyan",
+		"blocked", "priority_now", "error",
+	}
+	for _, ck := range colorKeys {
+		err := setConfigKey("colors."+ck, "200")
+		if err != nil {
+			t.Errorf("setConfigKey colors.%s: %v", ck, err)
+		}
+		val, err := getConfigValue("colors." + ck)
+		if err != nil {
+			t.Errorf("getConfigValue colors.%s: %v", ck, err)
+		}
+		if val != "200" {
+			t.Errorf("colors.%s = %q, want '200'", ck, val)
+		}
+	}
+}
+
+func TestIntegrationThemeApplyOnLoad(t *testing.T) {
+	setupIntegrationTest(t)
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	// Write a config with theme set
+	cfgContent := []byte("theme: high-contrast\nglamour_theme: dark\n")
+	cfgDir := tmpDir + "/p"
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgDir+"/config.yaml", cfgContent, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load config and apply theme (simulates startup)
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if loaded.Theme != "high-contrast" {
+		t.Errorf("loaded theme = %q, want 'high-contrast'", loaded.Theme)
+	}
+	if loaded.GlamourTheme != "dark" {
+		t.Errorf("loaded glamour_theme = %q, want 'dark'", loaded.GlamourTheme)
+	}
+
+	// Apply should not panic
+	theme.Apply(loaded)
+
+	if tui.GlamourThemeSetting != "dark" {
+		t.Errorf("GlamourThemeSetting = %q, want 'dark'", tui.GlamourThemeSetting)
 	}
 }
 

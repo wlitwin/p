@@ -10,13 +10,33 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ColorConfig holds individual color overrides. Values can be ANSI 256 codes
+// ("242"), hex codes ("#7C6F64"), or empty strings (use preset default).
+type ColorConfig struct {
+	Dim         string `yaml:"dim,omitempty"`
+	Done        string `yaml:"done,omitempty"`
+	Help        string `yaml:"help,omitempty"`
+	Accent      string `yaml:"accent,omitempty"`
+	Open        string `yaml:"open,omitempty"`
+	Green       string `yaml:"green,omitempty"`
+	Yellow      string `yaml:"yellow,omitempty"`
+	Red         string `yaml:"red,omitempty"`
+	Cyan        string `yaml:"cyan,omitempty"`
+	Blocked     string `yaml:"blocked,omitempty"`
+	PriorityNow string `yaml:"priority_now,omitempty"`
+	Error       string `yaml:"error,omitempty"`
+}
+
 // Config holds the global application configuration, persisted as YAML in
 // the XDG config directory (~/.config/p/config.yaml).
 type Config struct {
-	ProjectRoot     string `yaml:"project_root"`
-	ClaudePath      string `yaml:"claude_path"`
-	ClaudeModel     string `yaml:"claude_model"`
-	DefaultPriority string `yaml:"default_priority"`
+	ProjectRoot     string      `yaml:"project_root"`
+	ClaudePath      string      `yaml:"claude_path"`
+	ClaudeModel     string      `yaml:"claude_model"`
+	DefaultPriority string      `yaml:"default_priority"`
+	Theme           string      `yaml:"theme,omitempty"`
+	Colors          ColorConfig `yaml:"colors,omitempty"`
+	GlamourTheme    string      `yaml:"glamour_theme,omitempty"`
 }
 
 // DefaultConfig returns a Config with sensible defaults for all fields.

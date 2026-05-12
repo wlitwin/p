@@ -8,6 +8,7 @@ import (
 	"github.com/walter/p/internal/config"
 	"github.com/walter/p/internal/lock"
 	"github.com/walter/p/internal/project"
+	"github.com/walter/p/internal/theme"
 )
 
 // resolveClaudeConfig returns the claude binary path and model,
@@ -89,6 +90,7 @@ func loadConfig() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: loading config: %v\n", err)
 	}
+	theme.Apply(cfg)
 }
 
 // isInteractive returns true if stdin and stdout are both terminals.

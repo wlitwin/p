@@ -4,11 +4,17 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
+// GlamourThemeSetting controls the glamour markdown rendering style.
+// Set by the theme system. Values: "auto", "dark", "light", "notty".
+var GlamourThemeSetting = "auto"
+
+// Base styles used by both CLI output and TUI views.
+// These are var (not const) so the theme system can reassign them at startup.
 var (
 	Green  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	Yellow = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
 	Red    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	Dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	Dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	Bold   = lipgloss.NewStyle().Bold(true)
 	Cyan   = lipgloss.NewStyle().Foreground(lipgloss.Color("51"))
 )
