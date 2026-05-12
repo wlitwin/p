@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,16 +35,12 @@ Examples:
   p agent serviceA bugs --message "Focus on the critical ones first"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-
 		projectName := args[0]
 		listName := args[1]
 		maxIter, _ := cmd.Flags().GetInt("max-iterations")
 		userMessage, _ := cmd.Flags().GetString("message")
 
-		dir, err := project.Resolve(cfg.ProjectRoot, projectName)
+		dir, err := resolveProjectDir(projectName)
 		if err != nil {
 			return err
 		}
@@ -68,24 +63,16 @@ Examples:
 			return fmt.Errorf("loading list: %w", err)
 		}
 
-		pBinary, err := os.Executable()
+		pBinary, err := resolvePBinary()
 		if err != nil {
-			return fmt.Errorf("resolving executable path: %w", err)
+			return err
 		}
 
-		claudePath := cfg.ClaudePath
-		if claudePath == "" {
-			claudePath = "claude"
-		}
-		model := cfg.ClaudeModel
-		if model == "" {
-			model = "claude-opus-4-6"
-		}
+		claudePath, model := resolveClaudeConfig()
 
-		mcpCfg := ai.MCPConfig(pBinary)
-		mcpJSON, err := json.Marshal(mcpCfg)
+		mcpJSON, err := ai.MCPConfigJSON(pBinary)
 		if err != nil {
-			return fmt.Errorf("marshaling MCP config: %w", err)
+			return err
 		}
 
 		fmt.Fprintf(os.Stderr, "🤖 Starting agent loop for %s/%s (max %d iterations)\n\n", projectName, listName, maxIter)
@@ -124,7 +111,7 @@ Examples:
 
 			claudeArgs := []string{
 				"--system-prompt", prompt,
-				"--mcp-config", string(mcpJSON),
+				"--mcp-config", mcpJSON,
 				"--dangerously-skip-permissions",
 				"--model", model,
 				"--name", fmt.Sprintf("p-agent-%s-%s", projectName, listName),

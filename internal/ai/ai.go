@@ -95,6 +95,15 @@ func MCPConfig(pBinary string) MCPServerConfig {
 	}
 }
 
+// MCPConfigJSON returns the MCP config as a JSON string ready for --mcp-config.
+func MCPConfigJSON(pBinary string) (string, error) {
+	data, err := json.Marshal(MCPConfig(pBinary))
+	if err != nil {
+		return "", fmt.Errorf("marshaling MCP config: %w", err)
+	}
+	return string(data), nil
+}
+
 // stream-json event types we care about
 type streamEvent struct {
 	Type    string          `json:"type"`
@@ -134,22 +143,14 @@ func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, op
 	_ = opt
 	prompt := buildPrompt(task)
 
-	mcpCfg := MCPServerConfig{
-		MCPServers: map[string]MCPServerDef{
-			"p": {
-				Command: pBinary,
-				Args:    []string{"mcp"},
-			},
-		},
-	}
-	mcpJSON, err := json.Marshal(mcpCfg)
+	mcpJSON, err := MCPConfigJSON(pBinary)
 	if err != nil {
-		return fmt.Errorf("marshaling MCP config: %w", err)
+		return err
 	}
 
 	// Interactive mode: no --print, connect terminal directly
 	if task.Input == "" {
-		return runInteractive(ctx, claudeBinary, model, prompt, string(mcpJSON), task.ProjectName, opt)
+		return runInteractive(ctx, claudeBinary, model, prompt, mcpJSON, task.ProjectName, opt)
 	}
 
 	args := []string{
@@ -157,7 +158,7 @@ func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, op
 		"--verbose",
 		"--output-format", "stream-json",
 		"--system-prompt", prompt,
-		"--mcp-config", string(mcpJSON),
+		"--mcp-config", mcpJSON,
 		"--tools", "mcp,WebFetch,WebSearch",
 		"--dangerously-skip-permissions",
 		"--model", model,

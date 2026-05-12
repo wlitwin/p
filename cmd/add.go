@@ -8,7 +8,6 @@ import (
 	"github.com/walter/p/internal/ai"
 	"github.com/walter/p/internal/display"
 	"github.com/walter/p/internal/git"
-	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/service"
 	"github.com/walter/p/internal/todo"
 	"github.com/walter/p/internal/tui"
@@ -24,12 +23,8 @@ Use --knowledge (-k) to add to the knowledge base instead.
 Use --ai to have the AI agent decide placement and wording.`,
 	Args: cobra.RangeArgs(2, 3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-
 		projectName := args[0]
-		dir, err := project.Resolve(cfg.ProjectRoot, projectName)
+		dir, err := resolveProjectDir(projectName)
 		if err != nil {
 			return err
 		}
@@ -63,19 +58,12 @@ Use --ai to have the AI agent decide placement and wording.`,
 				listName = args[1]
 			}
 
-			pBinary, err := os.Executable()
+			pBinary, err := resolvePBinary()
 			if err != nil {
-				return fmt.Errorf("resolving executable path: %w", err)
+				return err
 			}
 
-			claudePath := cfg.ClaudePath
-			if claudePath == "" {
-				claudePath = "claude"
-			}
-			model := cfg.ClaudeModel
-			if model == "" {
-				model = "claude-opus-4-6"
-			}
+			claudePath, model := resolveClaudeConfig()
 
 			// Resolve context patterns from the target list if known.
 			// ResolveContext handles the fallback chain internally:

@@ -3,7 +3,6 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/ai"
-	"github.com/walter/p/internal/project"
 )
 
 const reviewInput = `Review the recent git history and current project state. Then:
@@ -28,10 +27,7 @@ Examples:
   p review serviceA`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
+		dir, err := resolveProjectDir(args[0])
 		if err != nil {
 			return err
 		}

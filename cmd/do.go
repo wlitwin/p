@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,12 +34,8 @@ Examples:
   p do serviceA feature-a 1 2            # AI works on specific items`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-
 		projectName := args[0]
-		dir, err := project.Resolve(cfg.ProjectRoot, projectName)
+		dir, err := resolveProjectDir(projectName)
 		if err != nil {
 			return err
 		}
@@ -95,25 +90,17 @@ Examples:
 		taskDesc := buildDoPrompt(projectName, dir, list, listName, itemIDs)
 
 		// Build MCP config for p tools
-		pBinary, err := os.Executable()
+		pBinary, err := resolvePBinary()
 		if err != nil {
-			return fmt.Errorf("resolving executable path: %w", err)
+			return err
 		}
 
-		mcpCfg := ai.MCPConfig(pBinary)
-		mcpJSON, err := json.Marshal(mcpCfg)
+		mcpJSON, err := ai.MCPConfigJSON(pBinary)
 		if err != nil {
-			return fmt.Errorf("marshaling MCP config: %w", err)
+			return err
 		}
 
-		claudePath := cfg.ClaudePath
-		if claudePath == "" {
-			claudePath = "claude"
-		}
-		model := cfg.ClaudeModel
-		if model == "" {
-			model = "claude-opus-4-6"
-		}
+		claudePath, model := resolveClaudeConfig()
 
 		// Spawn claude in the code directory
 		// Fold user message into system prompt so Claude has full context
@@ -123,7 +110,7 @@ Examples:
 
 		claudeArgs := []string{
 			"--system-prompt", taskDesc,
-			"--mcp-config", string(mcpJSON),
+			"--mcp-config", mcpJSON,
 			"--dangerously-skip-permissions",
 			"--model", model,
 			"--name", fmt.Sprintf("p-do-%s-%s", projectName, listName),

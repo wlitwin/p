@@ -47,28 +47,17 @@ type aiTaskConfig struct {
 // This is the shared flow used by plan and review commands. The context
 // enables cancellation of the claude subprocess.
 func runAIWithCommit(ctx context.Context, taskCfg aiTaskConfig) error {
-	if err := requireProjectRoot(); err != nil {
-		return err
-	}
-
-	dir, err := project.Resolve(cfg.ProjectRoot, taskCfg.ProjectName)
+	dir, err := resolveProjectDir(taskCfg.ProjectName)
 	if err != nil {
 		return err
 	}
 
-	pBinary, err := os.Executable()
+	pBinary, err := resolvePBinary()
 	if err != nil {
-		return fmt.Errorf("resolving executable path: %w", err)
+		return err
 	}
 
-	claudePath := cfg.ClaudePath
-	if claudePath == "" {
-		claudePath = "claude"
-	}
-	model := cfg.ClaudeModel
-	if model == "" {
-		model = "claude-opus-4-6"
-	}
+	claudePath, model := resolveClaudeConfig()
 
 	task := ai.Task{
 		ProjectName:     taskCfg.ProjectName,

@@ -10,6 +10,37 @@ import (
 	"github.com/walter/p/internal/project"
 )
 
+// resolveClaudeConfig returns the claude binary path and model,
+// applying defaults from config.
+func resolveClaudeConfig() (claudePath, model string) {
+	claudePath = cfg.ClaudePath
+	if claudePath == "" {
+		claudePath = "claude"
+	}
+	model = cfg.ClaudeModel
+	if model == "" {
+		model = "claude-opus-4-6"
+	}
+	return
+}
+
+// resolvePBinary returns the path to the running p executable.
+func resolvePBinary() (string, error) {
+	p, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolving executable path: %w", err)
+	}
+	return p, nil
+}
+
+// resolveProjectDir validates config and resolves a project name to its directory.
+func resolveProjectDir(projectName string) (string, error) {
+	if err := requireProjectRoot(); err != nil {
+		return "", err
+	}
+	return project.Resolve(cfg.ProjectRoot, projectName)
+}
+
 var cfg config.Config
 var verbose bool
 

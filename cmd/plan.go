@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/ai"
 	"github.com/walter/p/internal/display"
-	"github.com/walter/p/internal/project"
 	"github.com/walter/p/internal/todo"
 )
 
@@ -25,9 +24,6 @@ Examples:
   p plan serviceA                                          # interactive session`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
 		also, _ := cmd.Flags().GetStringSlice("also")
 		listName, _ := cmd.Flags().GetString("list")
 		cont, _ := cmd.Flags().GetBool("continue")
@@ -38,7 +34,7 @@ Examples:
 		}
 
 		// Resolve context patterns from the target list if specified
-		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
+		dir, err := resolveProjectDir(args[0])
 		if err != nil {
 			return err
 		}

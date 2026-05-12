@@ -24,14 +24,7 @@ Examples:
   p how                                           # interactive help session`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		claudePath := cfg.ClaudePath
-		if claudePath == "" {
-			claudePath = "claude"
-		}
-		model := cfg.ClaudeModel
-		if model == "" {
-			model = "claude-opus-4-6"
-		}
+		claudePath, model := resolveClaudeConfig()
 
 		helpText := buildHelpPrompt()
 

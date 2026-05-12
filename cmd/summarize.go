@@ -1,12 +1,8 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 	"github.com/walter/p/internal/ai"
-	"github.com/walter/p/internal/project"
 )
 
 var summarizeCmd = &cobra.Command{
@@ -19,29 +15,18 @@ Example:
   p summarize serviceA`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := requireProjectRoot(); err != nil {
-			return err
-		}
-
 		projectName := args[0]
-		dir, err := project.Resolve(cfg.ProjectRoot, projectName)
+		dir, err := resolveProjectDir(projectName)
 		if err != nil {
 			return err
 		}
 
-		pBinary, err := os.Executable()
+		pBinary, err := resolvePBinary()
 		if err != nil {
-			return fmt.Errorf("resolving executable path: %w", err)
+			return err
 		}
 
-		claudePath := cfg.ClaudePath
-		if claudePath == "" {
-			claudePath = "claude"
-		}
-		model := cfg.ClaudeModel
-		if model == "" {
-			model = "claude-opus-4-6"
-		}
+		claudePath, model := resolveClaudeConfig()
 
 		task := ai.Task{
 			ProjectName:     projectName,
