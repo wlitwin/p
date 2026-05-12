@@ -139,6 +139,7 @@ func buildHelpPrompt() string {
 	sb.WriteString("- Every mutation auto-commits to git\n")
 	sb.WriteString("- `code_dir` links a project to a code repository for `p do`\n")
 	sb.WriteString("- **Custom AI prompts**: Create `.p/prompt.md` in a project for base AI instructions that apply to all AI commands. Optionally create `.p/prompt-do.md`, `.p/prompt-ask.md`, `.p/prompt-plan.md`, `.p/prompt-review.md`, `.p/prompt-summarize.md`, or `.p/prompt-add.md` for mode-specific instructions (appended to the base prompt).\n")
+	sb.WriteString("- **Prompt templates**: To fully replace the default prompt (not just append), create `.p/template-{mode}.md` (e.g. `.p/template-ask.md`). Uses Go text/template syntax with variables: `{{.ProjectName}}`, `{{.ProjectDir}}`, `{{.ProjectDescription}}`, `{{.Mode}}`, `{{.Input}}`, `{{.ListName}}`, `{{.TodoLists}}`, `{{.TodoList}}`, `{{.KnowledgeDocs}}`, `{{.GitLog}}`, `{{.CustomPrompt}}`. Falls back to default prompt if template has errors.\n")
 
 	return sb.String()
 }
