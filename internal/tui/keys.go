@@ -74,26 +74,27 @@ var TodoListKeyMap = struct {
 
 // ItemListKeyMap defines keybindings for the item list view.
 var ItemListKeyMap = struct {
-	ToggleDone    key.Binding
-	SetOpen       key.Binding
-	SetBlocked    key.Binding
-	SetDone       key.Binding
-	Priority      key.Binding
-	New           key.Binding
-	Edit          key.Binding
-	DueDate       key.Binding
-	Tag           key.Binding
-	Move          key.Binding
-	Remove        key.Binding
-	FilterAll     key.Binding
-	FilterOpen    key.Binding
-	FilterDone    key.Binding
-	FilterBlocked key.Binding
-	CycleFilter   key.Binding
+	ToggleDone     key.Binding
+	SetOpen        key.Binding
+	SetBlocked     key.Binding
+	SetDone        key.Binding
+	Priority       key.Binding
+	New            key.Binding
+	Edit           key.Binding
+	DueDate        key.Binding
+	Tag            key.Binding
+	Move           key.Binding
+	Remove         key.Binding
+	FilterAll      key.Binding
+	FilterOpen     key.Binding
+	FilterDone     key.Binding
+	FilterBlocked  key.Binding
+	CycleFilter    key.Binding
+	PriorityFilter key.Binding
 }{
 	ToggleDone: key.NewBinding(
-		key.WithKeys(" "),
-		key.WithHelp("space", "toggle done"),
+		key.WithKeys(" ", "d"),
+		key.WithHelp("space/d", "toggle done"),
 	),
 	SetOpen: key.NewBinding(
 		key.WithKeys("o"),
@@ -132,8 +133,8 @@ var ItemListKeyMap = struct {
 		key.WithHelp("m", "move"),
 	),
 	Remove: key.NewBinding(
-		key.WithKeys("r"),
-		key.WithHelp("r", "remove"),
+		key.WithKeys("r", "delete"),
+		key.WithHelp("r/Del", "remove"),
 	),
 	FilterAll: key.NewBinding(
 		key.WithKeys("0"),
@@ -154,5 +155,9 @@ var ItemListKeyMap = struct {
 	CycleFilter: key.NewBinding(
 		key.WithKeys("f"),
 		key.WithHelp("f", "cycle filter"),
+	),
+	PriorityFilter: key.NewBinding(
+		key.WithKeys("P"),
+		key.WithHelp("P", "priority filter"),
 	),
 }

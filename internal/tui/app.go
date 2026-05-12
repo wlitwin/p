@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -40,9 +41,10 @@ type App struct {
 	// Help overlay
 	showHelp bool
 
-	// Status/error display
+	// Status/error display with auto-clear
 	statusMsg string
 	errorMsg  string
+	statusID  int // monotonic counter for clear timer dedup
 
 	// Quitting flag
 	quitting bool
@@ -152,11 +154,26 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ErrorMsg:
 		a.errorMsg = msg.Err.Error()
 		a.statusMsg = ""
-		return a, nil
+		a.statusID++
+		id := a.statusID
+		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+			return ClearStatusMsg{ID: id}
+		})
 
 	case StatusMsg:
 		a.statusMsg = msg.Text
 		a.errorMsg = ""
+		a.statusID++
+		id := a.statusID
+		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+			return ClearStatusMsg{ID: id}
+		})
+
+	case ClearStatusMsg:
+		if msg.ID == a.statusID {
+			a.statusMsg = ""
+			a.errorMsg = ""
+		}
 		return a, nil
 
 	default:
@@ -289,9 +306,10 @@ func (a *App) renderHelp() string {
 	help += HelpStyle.Render("    ↑/k  up    ↓/j  down    Enter  select") + "\n\n"
 
 	help += "  " + TitleStyle.Render("Item List") + "\n"
-	help += HelpStyle.Render("    Space  toggle done    o  open    b  block    x  done") + "\n"
-	help += HelpStyle.Render("    p  cycle priority     n  new item") + "\n"
-	help += HelpStyle.Render("    f  cycle filter       0-3  filter by state") + "\n\n"
+	help += HelpStyle.Render("    Space/d  toggle done  o  open    b  block    x  done") + "\n"
+	help += HelpStyle.Render("    p  cycle priority     n  new item    e  edit text") + "\n"
+	help += HelpStyle.Render("    D  due date   t  tags   m  move to list   r  remove") + "\n"
+	help += HelpStyle.Render("    f  cycle filter  0-3  filter by state  P  priority filter") + "\n\n"
 
 	help += "  " + TitleStyle.Render("Todo Lists") + "\n"
 	help += HelpStyle.Render("    Tab  switch to knowledge") + "\n\n"

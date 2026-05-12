@@ -11,6 +11,7 @@ import (
 	"github.com/walter/p/internal/lock"
 	"github.com/walter/p/internal/service"
 	"github.com/walter/p/internal/todo"
+	"github.com/walter/p/internal/validate"
 )
 
 type filterMode string
@@ -20,6 +21,14 @@ const (
 	filterOpen    filterMode = "open"
 	filterDone    filterMode = "done"
 	filterBlocked filterMode = "blocked"
+)
+
+type priorityFilterMode string
+
+const (
+	priorityFilterAll     priorityFilterMode = ""
+	priorityFilterNow     priorityFilterMode = "now"
+	priorityFilterBacklog priorityFilterMode = "backlog"
 )
 
 // filteredItem pairs a todo item with its original positional ID from the
@@ -36,10 +45,11 @@ type ItemListView struct {
 	projectDir  string
 	listName    string
 
-	list   *todo.List
-	items  []filteredItem
-	cursor int
-	filter filterMode
+	list           *todo.List
+	items          []filteredItem
+	cursor         int
+	filter         filterMode
+	priorityFilter priorityFilterMode
 
 	width  int
 	height int
@@ -50,6 +60,16 @@ type ItemListView struct {
 	inputPrompt string
 	inputValue  string
 	inputAction func(value string) tea.Cmd
+
+	// Confirmation prompt state
+	confirmMode   bool
+	confirmPrompt string
+	confirmAction func() tea.Cmd
+
+	// Move-to-list selection state
+	moveMode    bool
+	moveTargets []string
+	moveCursor  int
 }
 
 // NewItemListView creates a new item list view for the given list.
@@ -63,10 +83,11 @@ func NewItemListView(projectName, projectDir, listName string, width, height int
 	}
 }
 
-// IsInputMode reports whether the view is currently in text input mode.
-// Used by the App to avoid intercepting keys like 'q' during input.
+// IsInputMode reports whether the view is currently in an interactive mode
+// (text input, confirmation, or list selection). Used by the App to avoid
+// intercepting keys like 'q' during input.
 func (v *ItemListView) IsInputMode() bool {
-	return v.inputMode
+	return v.inputMode || v.confirmMode || v.moveMode
 }
 
 func (v *ItemListView) Init() tea.Cmd {
@@ -90,20 +111,22 @@ func (v *ItemListView) applyFilter() {
 		v.items = nil
 		return
 	}
-	v.items = filterItems(v.list.Items, string(v.filter), "", 1)
+	v.items = filterItems(v.list.Items, string(v.filter), string(v.priorityFilter), "", 1)
 }
 
-// filterItems returns items matching the given state filter, annotated with
-// their original positional IDs. Empty state matches all items.
-func filterItems(items []*todo.Item, state, prefix string, start int) []filteredItem {
+// filterItems returns items matching the given state and priority filters,
+// annotated with their original positional IDs. Empty filter values match all.
+func filterItems(items []*todo.Item, state, priority, prefix string, start int) []filteredItem {
 	var result []filteredItem
 	for i, item := range items {
 		id := fmt.Sprintf("%s%d", prefix, start+i)
-		if state == "" || string(item.State) == state {
+		stateMatch := state == "" || string(item.State) == state
+		priorityMatch := priority == "" || string(item.Priority) == priority
+		if stateMatch && priorityMatch {
 			result = append(result, filteredItem{OriginalID: id, Item: item})
 		}
 		if len(item.Children) > 0 {
-			result = append(result, filterItems(item.Children, state, id+".", 1)...)
+			result = append(result, filterItems(item.Children, state, priority, id+".", 1)...)
 		}
 	}
 	return result
@@ -140,9 +163,26 @@ func (v *ItemListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, nil
 
 	case DataChangedMsg:
-		return v, v.loadList()
+		var cmds []tea.Cmd
+		cmds = append(cmds, v.loadList())
+		if msg.StatusText != "" {
+			text := msg.StatusText
+			cmds = append(cmds, func() tea.Msg { return StatusMsg{Text: text} })
+		}
+		return v, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
+		// Confirmation mode: only y/n/esc are meaningful
+		if v.confirmMode {
+			return v.handleConfirm(msg)
+		}
+
+		// Move-to-list selection mode
+		if v.moveMode {
+			return v.handleMoveMode(msg)
+		}
+
+		// Inline text input mode
 		if v.inputMode {
 			return v.handleInput(msg)
 		}
@@ -178,7 +218,45 @@ func (v *ItemListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// New item
 		case key.Matches(msg, ItemListKeyMap.New):
-			v.startInput("New item: ", v.addItem)
+			v.startInput("New item: ", "", v.addItem)
+
+		// Edit item text
+		case key.Matches(msg, ItemListKeyMap.Edit):
+			item := v.selectedItem()
+			if item == nil {
+				break
+			}
+			id := v.selectedID()
+			v.startInput("Edit: ", item.Text, func(text string) tea.Cmd {
+				return v.doEditItem(id, text)
+			})
+
+		// Due date
+		case key.Matches(msg, ItemListKeyMap.DueDate):
+			item := v.selectedItem()
+			if item == nil {
+				break
+			}
+			id := v.selectedID()
+			v.startInput("Due date (YYYY-MM-DD): ", item.Due, func(date string) tea.Cmd {
+				return v.doSetDueDate(id, date)
+			})
+
+		// Tags
+		case key.Matches(msg, ItemListKeyMap.Tag):
+			item := v.selectedItem()
+			if item == nil {
+				break
+			}
+			id := v.selectedID()
+			currentTags := strings.Join(item.Tags, ", ")
+			v.startInput("Tags (comma-separated): ", currentTags, func(input string) tea.Cmd {
+				return v.doSetTags(id, input)
+			})
+
+		// Move to another list
+		case key.Matches(msg, ItemListKeyMap.Move):
+			return v, v.startMoveMode()
 
 		// Filter controls
 		case key.Matches(msg, ItemListKeyMap.CycleFilter):
@@ -192,9 +270,13 @@ func (v *ItemListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, ItemListKeyMap.FilterBlocked):
 			v.setFilter(filterBlocked)
 
-		// Remove
+		// Priority filter
+		case key.Matches(msg, ItemListKeyMap.PriorityFilter):
+			v.cyclePriorityFilter()
+
+		// Remove with confirmation
 		case key.Matches(msg, ItemListKeyMap.Remove):
-			return v, v.removeItem()
+			v.startRemoveConfirm()
 		}
 	}
 
@@ -231,10 +313,66 @@ func (v *ItemListView) handleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (v *ItemListView) startInput(prompt string, action func(string) tea.Cmd) {
+// handleConfirm processes key events during confirmation prompt mode.
+func (v *ItemListView) handleConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		v.confirmMode = false
+		action := v.confirmAction
+		v.confirmPrompt = ""
+		v.confirmAction = nil
+		if action != nil {
+			return v, action()
+		}
+		return v, nil
+	case "n", "N", "esc":
+		v.confirmMode = false
+		v.confirmPrompt = ""
+		v.confirmAction = nil
+		return v, nil
+	}
+	// Ignore other keys during confirmation
+	return v, nil
+}
+
+// handleMoveMode processes key events during move-to-list selection mode.
+func (v *ItemListView) handleMoveMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.String() == "esc":
+		v.moveMode = false
+		v.moveTargets = nil
+		return v, nil
+
+	case key.Matches(msg, NavKeyMap.Up):
+		if v.moveCursor > 0 {
+			v.moveCursor--
+		}
+		return v, nil
+
+	case key.Matches(msg, NavKeyMap.Down):
+		if v.moveCursor < len(v.moveTargets)-1 {
+			v.moveCursor++
+		}
+		return v, nil
+
+	case key.Matches(msg, NavKeyMap.Enter):
+		if v.moveCursor < len(v.moveTargets) {
+			target := v.moveTargets[v.moveCursor]
+			id := v.selectedID()
+			v.moveMode = false
+			v.moveTargets = nil
+			return v, v.doMoveItem(id, target)
+		}
+		return v, nil
+	}
+
+	return v, nil
+}
+
+func (v *ItemListView) startInput(prompt, initialValue string, action func(string) tea.Cmd) {
 	v.inputMode = true
 	v.inputPrompt = prompt
-	v.inputValue = ""
+	v.inputValue = initialValue
 	v.inputAction = action
 }
 
@@ -280,7 +418,7 @@ func (v *ItemListView) doStateChange(itemID string, state todo.State) tea.Cmd {
 		commitMsg := fmt.Sprintf("tui: set %s #%s %s", listName, itemID, state)
 		_ = git.CommitAll(context.Background(), dir, commitMsg)
 
-		return DataChangedMsg{}
+		return DataChangedMsg{StatusText: fmt.Sprintf("Marked #%s %s", itemID, state)}
 	}
 }
 
@@ -313,7 +451,7 @@ func (v *ItemListView) cyclePriority() tea.Cmd {
 		commitMsg := fmt.Sprintf("tui: set %s #%s priority=%s", listName, id, newPriority)
 		_ = git.CommitAll(context.Background(), dir, commitMsg)
 
-		return DataChangedMsg{}
+		return DataChangedMsg{StatusText: fmt.Sprintf("Set #%s priority=%s", id, newPriority)}
 	}
 }
 
@@ -336,16 +474,25 @@ func (v *ItemListView) addItem(text string) tea.Cmd {
 		commitMsg := fmt.Sprintf("tui: add item to %s", listName)
 		_ = git.CommitAll(context.Background(), dir, commitMsg)
 
-		return DataChangedMsg{}
+		return DataChangedMsg{StatusText: fmt.Sprintf("Added item to %s", listName)}
 	}
 }
 
-// removeItem removes the selected item from the list.
-func (v *ItemListView) removeItem() tea.Cmd {
+// startRemoveConfirm initiates an inline confirmation prompt for item removal.
+func (v *ItemListView) startRemoveConfirm() {
 	id := v.selectedID()
 	if id == "" {
-		return nil
+		return
 	}
+	v.confirmMode = true
+	v.confirmPrompt = fmt.Sprintf("Remove item #%s? (y/n)", id)
+	v.confirmAction = func() tea.Cmd {
+		return v.doRemoveItem(id)
+	}
+}
+
+// doRemoveItem removes the specified item from the list.
+func (v *ItemListView) doRemoveItem(itemID string) tea.Cmd {
 	dir := v.projectDir
 	listName := v.listName
 
@@ -356,14 +503,163 @@ func (v *ItemListView) removeItem() tea.Cmd {
 		}
 		defer lk.Release()
 
-		if err := service.RemoveItem(ctx(), dir, listName, id); err != nil {
+		if err := service.RemoveItem(ctx(), dir, listName, itemID); err != nil {
 			return ErrorMsg{Err: err}
 		}
 
-		commitMsg := fmt.Sprintf("tui: remove %s #%s", listName, id)
+		commitMsg := fmt.Sprintf("tui: remove %s #%s", listName, itemID)
 		_ = git.CommitAll(context.Background(), dir, commitMsg)
 
-		return DataChangedMsg{}
+		return DataChangedMsg{StatusText: fmt.Sprintf("Removed #%s", itemID)}
+	}
+}
+
+// doEditItem updates the text of the specified item.
+func (v *ItemListView) doEditItem(itemID, text string) tea.Cmd {
+	dir := v.projectDir
+	listName := v.listName
+
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		if err := service.UpdateItemText(ctx(), dir, listName, itemID, text); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		commitMsg := fmt.Sprintf("tui: edit %s #%s", listName, itemID)
+		_ = git.CommitAll(context.Background(), dir, commitMsg)
+
+		return DataChangedMsg{StatusText: fmt.Sprintf("Updated #%s text", itemID)}
+	}
+}
+
+// doSetDueDate validates and sets the due date for the specified item.
+func (v *ItemListView) doSetDueDate(itemID, date string) tea.Cmd {
+	dir := v.projectDir
+	listName := v.listName
+
+	return func() tea.Msg {
+		if err := validate.Date(date); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("invalid date: %w", err)}
+		}
+
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		if err := service.SetItemDue(ctx(), dir, listName, itemID, date); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		commitMsg := fmt.Sprintf("tui: set %s #%s due=%s", listName, itemID, date)
+		_ = git.CommitAll(context.Background(), dir, commitMsg)
+
+		return DataChangedMsg{StatusText: fmt.Sprintf("Set #%s due=%s", itemID, date)}
+	}
+}
+
+// doSetTags parses comma-separated tags and replaces the item's tag list.
+func (v *ItemListView) doSetTags(itemID, input string) tea.Cmd {
+	dir := v.projectDir
+	listName := v.listName
+
+	// Parse comma-separated tags, trimming whitespace
+	var tags []string
+	for _, t := range strings.Split(input, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		// Load, resolve, replace tags, save
+		list, err := todo.LoadList(dir, listName)
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+		item, err := todo.ResolveItem(list, itemID)
+		if err != nil {
+			return ErrorMsg{Err: err}
+		}
+		item.Tags = tags
+		if err := todo.SaveList(dir, listName, list); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		commitMsg := fmt.Sprintf("tui: set %s #%s tags", listName, itemID)
+		_ = git.CommitAll(context.Background(), dir, commitMsg)
+
+		tagStr := strings.Join(tags, ", ")
+		if tagStr == "" {
+			tagStr = "(cleared)"
+		}
+		return DataChangedMsg{StatusText: fmt.Sprintf("Set #%s tags: %s", itemID, tagStr)}
+	}
+}
+
+// startMoveMode loads available lists and enters move selection mode.
+func (v *ItemListView) startMoveMode() tea.Cmd {
+	id := v.selectedID()
+	if id == "" {
+		return nil
+	}
+
+	names, err := todo.ListNames(v.projectDir)
+	if err != nil {
+		return func() tea.Msg { return ErrorMsg{Err: fmt.Errorf("listing targets: %w", err)} }
+	}
+
+	// Filter out the current list
+	var targets []string
+	for _, n := range names {
+		if n != v.listName {
+			targets = append(targets, n)
+		}
+	}
+
+	if len(targets) == 0 {
+		return func() tea.Msg { return ErrorMsg{Err: fmt.Errorf("no other lists to move to")} }
+	}
+
+	v.moveMode = true
+	v.moveTargets = targets
+	v.moveCursor = 0
+	return nil
+}
+
+// doMoveItem moves the specified item to the target list.
+func (v *ItemListView) doMoveItem(itemID, targetList string) tea.Cmd {
+	dir := v.projectDir
+	listName := v.listName
+
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		if err := service.MoveItem(ctx(), dir, listName, itemID, targetList); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		commitMsg := fmt.Sprintf("tui: move %s #%s to %s", listName, itemID, targetList)
+		_ = git.CommitAll(context.Background(), dir, commitMsg)
+
+		return DataChangedMsg{StatusText: fmt.Sprintf("Moved #%s to %s", itemID, targetList)}
 	}
 }
 
@@ -388,6 +684,19 @@ func (v *ItemListView) setFilter(f filterMode) {
 	v.cursor = 0
 }
 
+func (v *ItemListView) cyclePriorityFilter() {
+	switch v.priorityFilter {
+	case priorityFilterAll:
+		v.priorityFilter = priorityFilterNow
+	case priorityFilterNow:
+		v.priorityFilter = priorityFilterBacklog
+	case priorityFilterBacklog:
+		v.priorityFilter = priorityFilterAll
+	}
+	v.applyFilter()
+	v.cursor = 0
+}
+
 func (v *ItemListView) View() string {
 	title := TitleStyle.Render(v.projectName) +
 		HelpStyle.Render(" · ") +
@@ -399,15 +708,27 @@ func (v *ItemListView) View() string {
 
 	s := title + "\n"
 
-	// Filter indicator
+	// Filter indicator line
+	var filters []string
 	filterLabel := "all"
 	if v.filter != filterAll {
 		filterLabel = string(v.filter)
 	}
-	s += HelpStyle.Render(fmt.Sprintf("  Filter: %s", filterLabel)) + "\n\n"
+	filters = append(filters, fmt.Sprintf("State: %s", filterLabel))
+
+	if v.priorityFilter != priorityFilterAll {
+		filters = append(filters, fmt.Sprintf("Priority: %s", string(v.priorityFilter)))
+	}
+	s += HelpStyle.Render(fmt.Sprintf("  Filter: %s", strings.Join(filters, " · "))) + "\n\n"
+
+	// Move-to-list overlay
+	if v.moveMode {
+		s += v.renderMoveMode()
+		return s
+	}
 
 	if len(v.items) == 0 {
-		if v.filter != filterAll {
+		if v.filter != filterAll || v.priorityFilter != priorityFilterAll {
 			s += HelpStyle.Render("  No items match the current filter.")
 		} else {
 			s += HelpStyle.Render("  No items. Press 'n' to add one.")
@@ -468,9 +789,10 @@ func (v *ItemListView) View() string {
 
 			// Metadata: priority and due date
 			var meta []string
-			if item.Priority == todo.Now {
+			switch item.Priority {
+			case todo.Now:
 				meta = append(meta, NowStyle.Render("now"))
-			} else if item.Priority == todo.Backlog {
+			case todo.Backlog:
 				meta = append(meta, BacklogStyle.Render("backlog"))
 			}
 			if item.Due != "" {
@@ -496,13 +818,33 @@ func (v *ItemListView) View() string {
 		}
 	}
 
-	// Input area or help bar
+	// Bottom bar: input, confirmation, or help
 	if v.inputMode {
 		cursorChar := CursorStyle.Render("█")
 		s += "\n" + HelpStyle.Render("  "+v.inputPrompt) + v.inputValue + cursorChar
+	} else if v.confirmMode {
+		s += "\n" + ErrorStyle.Render("  "+v.confirmPrompt)
 	} else {
-		s += "\n" + HelpStyle.Render("  ↑↓ nav  Space toggle  x done  o open  b block  p priority  n new  f filter  r remove")
+		s += "\n" + HelpStyle.Render("  ↑↓ nav  Space toggle  o/b/x state  p priority  n new  e edit  f/P filter  r remove")
 	}
 
+	return s
+}
+
+// renderMoveMode draws the move-to-list selection overlay.
+func (v *ItemListView) renderMoveMode() string {
+	s := "  " + TitleStyle.Render(fmt.Sprintf("Move item #%s to:", v.selectedID())) + "\n\n"
+
+	for i, target := range v.moveTargets {
+		cursor := "    "
+		name := target
+		if i == v.moveCursor {
+			cursor = CursorStyle.Render("  ▸ ")
+			name = SelectedStyle.Render(target)
+		}
+		s += cursor + name + "\n"
+	}
+
+	s += "\n" + HelpStyle.Render("  ↑↓ select  Enter confirm  Esc cancel")
 	return s
 }

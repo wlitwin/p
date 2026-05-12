@@ -30,7 +30,15 @@ type NavigateMsg struct {
 type GoBackMsg struct{}
 
 // DataChangedMsg signals that underlying data has changed and views should reload.
-type DataChangedMsg struct{}
+// StatusText optionally carries a success message to display after reload.
+type DataChangedMsg struct {
+	StatusText string
+}
+
+// ClearStatusMsg clears the status bar after a timeout.
+type ClearStatusMsg struct {
+	ID int
+}
 
 // ErrorMsg carries an error to be displayed in the status bar.
 type ErrorMsg struct {
