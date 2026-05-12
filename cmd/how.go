@@ -92,7 +92,7 @@ func buildHelpPrompt() string {
 		{"p project rename <old-name> <new-name>", "Rename a project"},
 		{"p project archive/unarchive <project>", "Archive or unarchive a project"},
 		{"p project set <project> [key] [value]", "View or set project settings (description, code_dir)"},
-		{"p project describe <project> <text...>", "Set project description"},
+		{"p project describe <project> <text...> [--auto]", "Set project description (--auto generates from contents)"},
 		{"p project log <project> [-n COUNT] [--since DATE] [--until DATE] [--grep TEXT]", "Show git history with optional filters"},
 		{"p project diff <project>", "Show uncommitted changes"},
 		{"p project revert <project> [-y]", "Undo the last commit"},
