@@ -154,7 +154,7 @@ func buildHelpPrompt() string {
 
 	sb.WriteString("\n## Key concepts\n\n")
 	sb.WriteString("- **Projects** are directories under the project root, each with its own git repo\n")
-	sb.WriteString("- **Todo lists** are markdown files in `todos/`, containing checkbox items with inline metadata\n")
+	sb.WriteString("- **Todo lists** are markdown files in `todos/`, containing checkbox items with inline metadata. Lists support subdirectory paths (e.g., `sprint/week-1`, `team/backend`) for organization.\n")
 	sb.WriteString("- **Knowledge docs** are markdown files in `knowledge/`, organized wiki-style with [[links]]\n")
 	sb.WriteString("- **Item IDs** are positional (1, 2, 2.1, 2.2) — shown in `p list` output\n")
 	sb.WriteString("- **Tags** are inline metadata: `tags=bug,frontend`\n")

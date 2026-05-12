@@ -63,13 +63,70 @@ func TestListNameSentinels(t *testing.T) {
 	if !errors.Is(err, ErrEmpty) {
 		t.Errorf("expected ErrEmpty, got %v", err)
 	}
-	err = ListName(strings.Repeat("x", 65))
+	err = ListName(strings.Repeat("x", 129))
 	if !errors.Is(err, ErrTooLong) {
 		t.Errorf("expected ErrTooLong, got %v", err)
 	}
 	err = ListName("bad name")
 	if !errors.Is(err, ErrInvalidChars) {
 		t.Errorf("expected ErrInvalidChars, got %v", err)
+	}
+}
+
+func TestListNameSubdirectories(t *testing.T) {
+	valid := []string{
+		"backlog",
+		"sprint/week-1",
+		"team/backend",
+		"project/auth/tasks",
+		"a/b/c/d/e", // max 5 levels
+	}
+	for _, name := range valid {
+		if err := ListName(name); err != nil {
+			t.Errorf("ListName(%q) should be valid: %v", name, err)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"../escape",
+		"dir/../escape",
+		"/leading",
+		"trailing/",
+		"a//double",
+		"a/b/c/d/e/f", // 6 levels, exceeds max
+		"dir/.hidden",
+		"has space/file",
+	}
+	for _, name := range invalid {
+		if err := ListName(name); err == nil {
+			t.Errorf("ListName(%q) should be invalid", name)
+		}
+	}
+}
+
+func TestListNameSentinelsSubdir(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr error
+	}{
+		{"path traversal", "sprint/../escape", ErrInvalidChars},
+		{"leading slash", "/sprint/week-1", ErrInvalidChars},
+		{"trailing slash", "sprint/", ErrInvalidChars},
+		{"double slash", "sprint//week-1", ErrInvalidChars},
+		{"too many levels", "a/b/c/d/e/f", ErrTooLong},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ListName(tt.input)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("errors.Is(err, %v) = false; err = %v", tt.wantErr, err)
+			}
+		})
 	}
 }
 

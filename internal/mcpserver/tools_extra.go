@@ -72,7 +72,7 @@ func todoRmListTool() mcp.Tool {
 	return mcp.NewTool("todo_rm_list",
 		mcp.WithDescription("Delete an entire todo list."),
 		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
-		mcp.WithString("list", mcp.Description("Todo list name to delete"), mcp.Required()),
+		mcp.WithString("list", mcp.Description("Todo list name to delete (supports subdirectory paths like 'sprint/week-1')"), mcp.Required()),
 	)
 }
 

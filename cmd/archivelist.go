@@ -47,9 +47,15 @@ func archiveOneList(ctx context.Context, dir, listName string, restore bool) err
 		if _, err := os.Stat(archivedPath); err != nil {
 			return fmt.Errorf("archived list %q not found", listName)
 		}
+		// Create parent directories for active path (subdirectory lists)
+		if err := os.MkdirAll(filepath.Dir(activePath), 0o755); err != nil {
+			return err
+		}
 		if err := os.Rename(archivedPath, activePath); err != nil {
 			return err
 		}
+		// Clean up empty archive parent directories
+		todo.CleanEmptyParents(archivedPath, archiveDir)
 		if err := git.CommitAll(ctx, dir, fmt.Sprintf("p: restore todo list %s from archive", listName)); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}
@@ -58,12 +64,15 @@ func archiveOneList(ctx context.Context, dir, listName string, restore bool) err
 		if _, err := os.Stat(activePath); err != nil {
 			return fmt.Errorf("todo list %q not found", listName)
 		}
-		if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+		// Create archive subdirectory structure (e.g., .archive/sprint/)
+		if err := os.MkdirAll(filepath.Dir(archivedPath), 0o755); err != nil {
 			return err
 		}
 		if err := os.Rename(activePath, archivedPath); err != nil {
 			return err
 		}
+		// Clean up empty parent directories in active lists
+		todo.CleanEmptyParents(activePath, todo.ListDir(dir))
 		if err := git.CommitAll(ctx, dir, fmt.Sprintf("p: archive todo list %s", listName)); err != nil {
 			return fmt.Errorf("committing: %w", err)
 		}

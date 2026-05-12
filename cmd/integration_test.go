@@ -1061,3 +1061,120 @@ func TestIntegrationServiceSetDefaultContext(t *testing.T) {
 		t.Errorf("expected nil after clear, got %v", meta.DefaultContext)
 	}
 }
+
+func TestIntegrationTodoSubdirectories(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "subdir-proj", "Subdirectory test project")
+	dir := filepath.Join(root, "subdir-proj")
+	ctx := context.Background()
+
+	// Create lists in subdirectories
+	if err := service.AddItem(ctx, dir, "sprint/week-1", "Fix login bug", "now", "", ""); err != nil {
+		t.Fatalf("AddItem to sprint/week-1: %v", err)
+	}
+	if err := service.AddItem(ctx, dir, "sprint/week-1", "Add tests", "backlog", "", ""); err != nil {
+		t.Fatalf("AddItem 2 to sprint/week-1: %v", err)
+	}
+	if err := service.AddItem(ctx, dir, "sprint/week-2", "Deploy service", "now", "", ""); err != nil {
+		t.Fatalf("AddItem to sprint/week-2: %v", err)
+	}
+	if err := service.AddItem(ctx, dir, "backlog", "Refactor auth", "backlog", "", ""); err != nil {
+		t.Fatalf("AddItem to backlog: %v", err)
+	}
+	if err := service.AddItem(ctx, dir, "team/backend/api", "New endpoint", "now", "", ""); err != nil {
+		t.Fatalf("AddItem to team/backend/api: %v", err)
+	}
+
+	// Verify all lists are found
+	names, err := todo.ListNames(dir)
+	if err != nil {
+		t.Fatalf("ListNames: %v", err)
+	}
+	want := []string{"backlog", "sprint/week-1", "sprint/week-2", "team/backend/api"}
+	if len(names) != len(want) {
+		t.Fatalf("ListNames = %v, want %v", names, want)
+	}
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("names[%d] = %q, want %q", i, names[i], w)
+		}
+	}
+
+	// Change state on subdirectory list item
+	if err := service.SetItemState(ctx, dir, "sprint/week-1", "1", todo.Done); err != nil {
+		t.Fatalf("SetItemState: %v", err)
+	}
+	list, _ := todo.LoadList(dir, "sprint/week-1")
+	if list.Items[0].State != todo.Done {
+		t.Errorf("item state = %q, want done", list.Items[0].State)
+	}
+
+	// Move item between subdirectory lists
+	if err := service.MoveItem(ctx, dir, "sprint/week-1", "2", "sprint/week-2"); err != nil {
+		t.Fatalf("MoveItem: %v", err)
+	}
+	dstList, _ := todo.LoadList(dir, "sprint/week-2")
+	if len(dstList.Items) != 2 {
+		t.Errorf("dest list items = %d, want 2", len(dstList.Items))
+	}
+
+	// Delete subdirectory list and verify parent cleanup
+	if err := service.RemoveList(ctx, dir, "team/backend/api"); err != nil {
+		t.Fatalf("RemoveList: %v", err)
+	}
+	// team/backend/ and team/ directories should be cleaned up
+	if _, err := os.Stat(filepath.Join(dir, "todos", "team")); !os.IsNotExist(err) {
+		t.Error("expected team/ directory to be cleaned up after last list removed")
+	}
+
+	// Verify remaining lists still work
+	names, _ = todo.ListNames(dir)
+	if len(names) != 3 {
+		t.Errorf("remaining lists = %v, want 3 lists", names)
+	}
+
+	// Get project list statuses (should include subdirectory lists)
+	statuses, err := service.GetProjectListStatuses(ctx, dir)
+	if err != nil {
+		t.Fatalf("GetProjectListStatuses: %v", err)
+	}
+	if len(statuses) != 3 {
+		t.Errorf("statuses = %d, want 3", len(statuses))
+	}
+}
+
+func TestIntegrationTodoSubdirectoryValidation(t *testing.T) {
+	// Validate that subdirectory list names are accepted
+	validNames := []string{"sprint/week-1", "team/backend", "a/b/c/d/e"}
+	for _, name := range validNames {
+		if err := validate.ListName(name); err != nil {
+			t.Errorf("ListName(%q) should be valid: %v", name, err)
+		}
+	}
+
+	// Validate path traversal rejection
+	invalidNames := []string{"../escape", "sprint/../escape", "/absolute", "trailing/", "a//b"}
+	for _, name := range invalidNames {
+		if err := validate.ListName(name); err == nil {
+			t.Errorf("ListName(%q) should be invalid", name)
+		}
+	}
+}
+
+func TestIntegrationTodoSubdirectoryNameConflict(t *testing.T) {
+	root := setupIntegrationTest(t)
+	project.Create(root, "conflict-proj", "")
+	dir := filepath.Join(root, "conflict-proj")
+	ctx := context.Background()
+
+	// Create sprint/week-1
+	if err := service.AddItem(ctx, dir, "sprint/week-1", "Task 1", "now", "", ""); err != nil {
+		t.Fatalf("AddItem: %v", err)
+	}
+
+	// Trying to create "sprint" (flat list conflicting with sprint/ directory) should fail
+	_, err := todo.CreateList(dir, "sprint", "Sprint")
+	if err == nil {
+		t.Error("expected error creating 'sprint' when sprint/ directory exists")
+	}
+}

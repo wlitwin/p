@@ -170,7 +170,7 @@ func MoveItem(_ context.Context, dir, srcListName, itemID, dstListName string) e
 	return nil
 }
 
-// RemoveList deletes a todo list file.
+// RemoveList deletes a todo list file and cleans up empty parent directories.
 func RemoveList(_ context.Context, dir, listName string) error {
 	path := todo.ListPath(dir, listName)
 	if _, err := os.Stat(path); err != nil {
@@ -180,6 +180,9 @@ func RemoveList(_ context.Context, dir, listName string) error {
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("deleting: %w", err)
 	}
+
+	// Clean up empty parent directories for subdirectory lists
+	todo.CleanEmptyParents(path, todo.ListDir(dir))
 
 	return nil
 }

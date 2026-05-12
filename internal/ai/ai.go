@@ -470,7 +470,7 @@ func planInstructions(task Task) string {
 	sb.WriteString("Guidelines:\n")
 	sb.WriteString("- Start by reading the current project state using `project_list`, `todo_list`, and `knowledge_read`.\n")
 	sb.WriteString("- You can create multiple todo items across multiple lists.\n")
-	sb.WriteString("- You can create new todo lists if the work spans different topics.\n")
+	sb.WriteString("- You can create new todo lists if the work spans different topics. Todo lists support subdirectory paths (e.g., `sprint/week-1`, `team/backend`) for organization.\n")
 	sb.WriteString("- You can create or update knowledge docs to capture context, decisions, or plans. Knowledge docs support subdirectories (e.g., `architecture/overview`, `decisions/db-migration`) for organization.\n")
 	sb.WriteString("- Group related todos into the same list. Use separate lists for distinct workstreams.\n")
 	sb.WriteString("- Word each todo as a clear, actionable task.\n")

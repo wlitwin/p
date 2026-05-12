@@ -4,8 +4,10 @@ package todo
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -83,46 +85,56 @@ func ListDir(projectDir string) string {
 }
 
 // ListNames returns the names of all non-archived todo lists in the project,
-// derived from .md filenames in the todos directory.
+// recursively walking subdirectories. Names use forward slashes for
+// subdirectory paths (e.g. "sprint/week-1"). The .archive directory is skipped.
 func ListNames(projectDir string) ([]string, error) {
 	dir := ListDir(projectDir)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+	var names []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
+		if d.IsDir() && d.Name() == ".archive" {
+			return filepath.SkipDir
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		rel, _ := filepath.Rel(dir, path)
+		name := strings.TrimSuffix(rel, ".md")
+		name = filepath.ToSlash(name)
+		names = append(names, name)
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		names = append(names, strings.TrimSuffix(e.Name(), ".md"))
-	}
+	sort.Strings(names)
 	return names, nil
 }
 
 // ArchivedListNames returns the names of all archived todo lists in the
-// project's .archive directory.
+// project's .archive directory, recursively walking subdirectories.
 func ArchivedListNames(projectDir string) ([]string, error) {
 	dir := filepath.Join(ListDir(projectDir), ".archive")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+	var names []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		rel, _ := filepath.Rel(dir, path)
+		name := strings.TrimSuffix(rel, ".md")
+		name = filepath.ToSlash(name)
+		names = append(names, name)
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		names = append(names, strings.TrimSuffix(e.Name(), ".md"))
-	}
+	sort.Strings(names)
 	return names, nil
 }
 
@@ -141,19 +153,30 @@ func LoadList(projectDir, listName string) (*List, error) {
 }
 
 // SaveList renders a todo list to markdown and writes it to disk,
-// updating the list's Updated timestamp.
+// updating the list's Updated timestamp. Creates parent directories
+// if they don't exist (for subdirectory list paths).
 func SaveList(projectDir, listName string, list *List) error {
 	list.Updated = time.Now().UTC()
+	path := ListPath(projectDir, listName)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	data := Render(list)
-	return os.WriteFile(ListPath(projectDir, listName), []byte(data), 0o644)
+	return os.WriteFile(path, []byte(data), 0o644)
 }
 
 // CreateList creates a new todo list with the given title and writes it to disk.
-// Returns an error if a list with that name already exists.
+// Returns an error if a list with that name already exists or conflicts with
+// an existing file/directory. Creates parent directories as needed for
+// subdirectory paths.
 func CreateList(projectDir, listName, title string) (*List, error) {
 	path := ListPath(projectDir, listName)
 	if _, err := os.Stat(path); err == nil {
 		return nil, fmt.Errorf("list %q already exists", listName)
+	}
+
+	if err := CheckNameConflict(projectDir, listName); err != nil {
+		return nil, err
 	}
 
 	list := &List{
@@ -345,4 +368,49 @@ func nextDueDate(recur, currentDue string) string {
 	}
 
 	return next.Format("2006-01-02")
+}
+
+// CleanEmptyParents removes empty parent directories starting from the
+// given path and walking up to (but not including) the stopAt directory.
+// This is used after deleting or archiving a list in a subdirectory to
+// clean up empty intermediate directories.
+func CleanEmptyParents(path, stopAt string) {
+	dir := filepath.Dir(path)
+	for dir != stopAt && dir != "." && dir != "/" {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			break
+		}
+		os.Remove(dir)
+		dir = filepath.Dir(dir)
+	}
+}
+
+// CheckNameConflict validates that creating a list with the given name
+// won't conflict with existing files or directories. For example, if
+// "sprint/week-1" exists as a list, creating "sprint" would conflict
+// (file vs directory). Conversely, if "sprint.md" exists, creating
+// "sprint/week-1" would conflict.
+func CheckNameConflict(projectDir, listName string) error {
+	dir := ListDir(projectDir)
+
+	// Check if any existing list is a prefix of the new name (directory conflict)
+	// e.g., "sprint" exists and we're trying to create "sprint/week-1"
+	parts := strings.Split(listName, "/")
+	for i := 1; i < len(parts); i++ {
+		prefix := strings.Join(parts[:i], "/")
+		prefixPath := filepath.Join(dir, prefix+".md")
+		if _, err := os.Stat(prefixPath); err == nil {
+			return fmt.Errorf("cannot create %q: list %q already exists as a file", listName, prefix)
+		}
+	}
+
+	// Check if the new name is a prefix of any existing list (file vs directory conflict)
+	// e.g., we're trying to create "sprint" but "sprint/week-1" exists
+	newDir := filepath.Join(dir, listName)
+	if info, err := os.Stat(newDir); err == nil && info.IsDir() {
+		return fmt.Errorf("cannot create %q: a directory with that name already exists containing other lists", listName)
+	}
+
+	return nil
 }

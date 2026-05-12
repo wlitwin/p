@@ -133,7 +133,7 @@ func todoListTool() mcp.Tool {
 	return mcp.NewTool("todo_list",
 		mcp.WithDescription("List todo lists in a project, or items in a specific list."),
 		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
-		mcp.WithString("list", mcp.Description("Todo list name. If omitted, lists all todo lists in the project.")),
+		mcp.WithString("list", mcp.Description("Todo list name (supports subdirectory paths like 'sprint/week-1'). If omitted, lists all todo lists in the project.")),
 	)
 }
 
@@ -149,7 +149,7 @@ func todoAddTool() mcp.Tool {
 	return mcp.NewTool("todo_add",
 		mcp.WithDescription("Add a todo item to a list. Creates the list if it doesn't exist."),
 		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
-		mcp.WithString("list", mcp.Description("Todo list name"), mcp.Required()),
+		mcp.WithString("list", mcp.Description("Todo list name (supports subdirectory paths like 'sprint/week-1')"), mcp.Required()),
 		mcp.WithString("text", mcp.Description("Todo item text"), mcp.Required()),
 		mcp.WithString("priority", mcp.Description("Priority: now or backlog"), mcp.DefaultString("now")),
 		mcp.WithString("due", mcp.Description("Due date in YYYY-MM-DD format")),
@@ -229,9 +229,9 @@ func todoMoveTool() mcp.Tool {
 	return mcp.NewTool("todo_move",
 		mcp.WithDescription("Move a todo item from one list to another."),
 		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
-		mcp.WithString("list", mcp.Description("Source todo list name"), mcp.Required()),
+		mcp.WithString("list", mcp.Description("Source todo list name (supports subdirectory paths like 'sprint/week-1')"), mcp.Required()),
 		mcp.WithString("item_id", mcp.Description("Item ID to move (e.g. '1' or '2.1')"), mcp.Required()),
-		mcp.WithString("target_list", mcp.Description("Destination todo list name"), mcp.Required()),
+		mcp.WithString("target_list", mcp.Description("Destination todo list name (supports subdirectory paths)"), mcp.Required()),
 	)
 }
 

@@ -52,16 +52,32 @@ func ProjectName(name string) error {
 	return nil
 }
 
-// ListName validates a todo list name. Same rules as ProjectName.
+// ListName validates a todo list name. Allows subdirectory paths with /
+// separators (e.g. "sprint/week-1") but rejects ".." for path traversal
+// prevention. Each path segment must start with a letter or digit and
+// contain only letters, digits, hyphens, and underscores. Maximum depth
+// is 5 levels.
 func ListName(name string) error {
 	if name == "" {
 		return fmt.Errorf("list name cannot be empty: %w", ErrEmpty)
 	}
-	if len(name) > 64 {
-		return fmt.Errorf("list name too long (max 64 characters): %w", ErrTooLong)
+	if len(name) > 128 {
+		return fmt.Errorf("list name too long (max 128 characters): %w", ErrTooLong)
 	}
-	if !nameRe.MatchString(name) {
-		return fmt.Errorf("list name %q contains invalid characters — use letters, numbers, hyphens, underscores: %w", name, ErrInvalidChars)
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("list name %q contains '..': %w", name, ErrInvalidChars)
+	}
+	if strings.HasPrefix(name, "/") || strings.HasSuffix(name, "/") || strings.Contains(name, "//") {
+		return fmt.Errorf("list name %q contains invalid characters — use letters, numbers, hyphens, underscores, and / for subdirectories: %w", name, ErrInvalidChars)
+	}
+	parts := strings.Split(name, "/")
+	if len(parts) > 5 {
+		return fmt.Errorf("list name %q has too many directory levels (max 5): %w", name, ErrTooLong)
+	}
+	for _, part := range parts {
+		if !nameRe.MatchString(part) {
+			return fmt.Errorf("list name %q contains invalid characters — use letters, numbers, hyphens, underscores, and / for subdirectories: %w", name, ErrInvalidChars)
+		}
 	}
 	return nil
 }

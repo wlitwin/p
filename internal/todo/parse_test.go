@@ -1293,3 +1293,253 @@ func TestContextSaveLoadRoundTrip(t *testing.T) {
 		t.Errorf("Context[1] = %q, want %q", loaded.Context[1], "design/**")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Subdirectory support tests
+// ---------------------------------------------------------------------------
+
+func TestListNamesRecursive(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	_, _ = CreateList(dir, "backlog", "Backlog")
+	_, _ = CreateList(dir, "sprint/week-1", "Sprint Week 1")
+	_, _ = CreateList(dir, "sprint/week-2", "Sprint Week 2")
+	_, _ = CreateList(dir, "team/backend/tasks", "Backend Tasks")
+
+	names, err := ListNames(dir)
+	if err != nil {
+		t.Fatalf("ListNames error: %v", err)
+	}
+
+	want := []string{"backlog", "sprint/week-1", "sprint/week-2", "team/backend/tasks"}
+	if len(names) != len(want) {
+		t.Fatalf("len(names) = %d, want %d; got %v", len(names), len(want), names)
+	}
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("names[%d] = %q, want %q", i, names[i], w)
+		}
+	}
+}
+
+func TestListNamesSkipsArchive(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "todos", ".archive"), 0o755)
+
+	_, _ = CreateList(dir, "active", "Active")
+	// Manually create an archived list
+	archivePath := filepath.Join(dir, "todos", ".archive", "old.md")
+	os.WriteFile(archivePath, []byte("---\ntitle: Old\n---\n"), 0o644)
+
+	names, err := ListNames(dir)
+	if err != nil {
+		t.Fatalf("ListNames error: %v", err)
+	}
+
+	if len(names) != 1 || names[0] != "active" {
+		t.Errorf("names = %v, want [active]", names)
+	}
+}
+
+func TestCreateListSubdir(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	list, err := CreateList(dir, "sprint/week-1", "Sprint Week 1")
+	if err != nil {
+		t.Fatalf("CreateList error: %v", err)
+	}
+	if list.Title != "Sprint Week 1" {
+		t.Errorf("Title = %q, want %q", list.Title, "Sprint Week 1")
+	}
+
+	// Verify file was created in correct subdirectory
+	path := ListPath(dir, "sprint/week-1")
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("list file not created at expected path: %v", err)
+	}
+
+	// Verify it loads back correctly
+	loaded, err := LoadList(dir, "sprint/week-1")
+	if err != nil {
+		t.Fatalf("LoadList error: %v", err)
+	}
+	if loaded.Title != "Sprint Week 1" {
+		t.Errorf("loaded Title = %q, want %q", loaded.Title, "Sprint Week 1")
+	}
+}
+
+func TestSaveListCreatesSubdirs(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	list := &List{
+		Title:   "Deep Nested",
+		Created: time.Now().UTC(),
+	}
+	AddItem(list, "Test item", Now, "")
+
+	err := SaveList(dir, "deep/nested/list", list)
+	if err != nil {
+		t.Fatalf("SaveList error: %v", err)
+	}
+
+	// Load back and verify
+	loaded, err := LoadList(dir, "deep/nested/list")
+	if err != nil {
+		t.Fatalf("LoadList error: %v", err)
+	}
+	if loaded.Title != "Deep Nested" {
+		t.Errorf("Title = %q, want %q", loaded.Title, "Deep Nested")
+	}
+	if len(loaded.Items) != 1 {
+		t.Fatalf("len(Items) = %d, want 1", len(loaded.Items))
+	}
+	if loaded.Items[0].Text != "Test item" {
+		t.Errorf("Items[0].Text = %q, want %q", loaded.Items[0].Text, "Test item")
+	}
+}
+
+func TestArchivedListNamesRecursive(t *testing.T) {
+	dir := t.TempDir()
+	archiveDir := filepath.Join(dir, "todos", ".archive")
+
+	// Create archived lists in subdirectories
+	os.MkdirAll(filepath.Join(archiveDir, "sprint"), 0o755)
+	os.WriteFile(filepath.Join(archiveDir, "old.md"), []byte("---\ntitle: Old\n---\n"), 0o644)
+	os.WriteFile(filepath.Join(archiveDir, "sprint", "week-1.md"), []byte("---\ntitle: Week 1\n---\n"), 0o644)
+
+	names, err := ArchivedListNames(dir)
+	if err != nil {
+		t.Fatalf("ArchivedListNames error: %v", err)
+	}
+
+	want := []string{"old", "sprint/week-1"}
+	if len(names) != len(want) {
+		t.Fatalf("len(names) = %d, want %d; got %v", len(names), len(want), names)
+	}
+	for i, w := range want {
+		if names[i] != w {
+			t.Errorf("names[%d] = %q, want %q", i, names[i], w)
+		}
+	}
+}
+
+func TestCleanEmptyParents(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "todos")
+	os.MkdirAll(filepath.Join(root, "sprint", "deep"), 0o755)
+
+	// Create a file deep in the tree
+	filePath := filepath.Join(root, "sprint", "deep", "test.md")
+	os.WriteFile(filePath, []byte("test"), 0o644)
+
+	// Remove the file
+	os.Remove(filePath)
+
+	// Clean up empty parents
+	CleanEmptyParents(filePath, root)
+
+	// Both "deep" and "sprint" should be removed since they're empty
+	if _, err := os.Stat(filepath.Join(root, "sprint", "deep")); !os.IsNotExist(err) {
+		t.Error("sprint/deep directory should have been removed")
+	}
+	if _, err := os.Stat(filepath.Join(root, "sprint")); !os.IsNotExist(err) {
+		t.Error("sprint directory should have been removed")
+	}
+	// Root should still exist
+	if _, err := os.Stat(root); err != nil {
+		t.Error("root directory should still exist")
+	}
+}
+
+func TestCleanEmptyParentsStopsAtNonEmpty(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "todos")
+	os.MkdirAll(filepath.Join(root, "sprint", "deep"), 0o755)
+
+	// Create a sibling file in sprint/
+	os.WriteFile(filepath.Join(root, "sprint", "other.md"), []byte("keep"), 0o644)
+
+	filePath := filepath.Join(root, "sprint", "deep", "test.md")
+	os.WriteFile(filePath, []byte("test"), 0o644)
+	os.Remove(filePath)
+
+	CleanEmptyParents(filePath, root)
+
+	// "deep" should be removed
+	if _, err := os.Stat(filepath.Join(root, "sprint", "deep")); !os.IsNotExist(err) {
+		t.Error("sprint/deep directory should have been removed")
+	}
+	// "sprint" should still exist (has other.md)
+	if _, err := os.Stat(filepath.Join(root, "sprint")); err != nil {
+		t.Error("sprint directory should still exist (has sibling file)")
+	}
+}
+
+func TestCheckNameConflictFileVsDir(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	// Create a list "sprint"
+	_, _ = CreateList(dir, "sprint", "Sprint")
+
+	// Trying to create "sprint/week-1" should conflict (sprint.md exists)
+	err := CheckNameConflict(dir, "sprint/week-1")
+	if err == nil {
+		t.Error("expected conflict error when creating sprint/week-1 with sprint.md existing")
+	}
+}
+
+func TestCheckNameConflictDirVsFile(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	// Create a list "sprint/week-1" (creates sprint/ directory)
+	_, _ = CreateList(dir, "sprint/week-1", "Week 1")
+
+	// Trying to create "sprint" should conflict (sprint/ directory exists)
+	err := CheckNameConflict(dir, "sprint")
+	if err == nil {
+		t.Error("expected conflict error when creating sprint with sprint/ directory existing")
+	}
+}
+
+func TestCheckNameConflictNoConflict(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	// Create "sprint/week-1"
+	_, _ = CreateList(dir, "sprint/week-1", "Week 1")
+
+	// Creating "sprint/week-2" should be fine
+	err := CheckNameConflict(dir, "sprint/week-2")
+	if err != nil {
+		t.Errorf("unexpected conflict error: %v", err)
+	}
+
+	// Creating "backlog" should also be fine
+	err = CheckNameConflict(dir, "backlog")
+	if err != nil {
+		t.Errorf("unexpected conflict error: %v", err)
+	}
+}
+
+func TestCreateListConflictDetection(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	// Create "sprint/week-1"
+	_, err := CreateList(dir, "sprint/week-1", "Week 1")
+	if err != nil {
+		t.Fatalf("CreateList error: %v", err)
+	}
+
+	// Trying to create "sprint" should fail
+	_, err = CreateList(dir, "sprint", "Sprint")
+	if err == nil {
+		t.Error("expected error when creating list conflicting with existing directory")
+	}
+}
