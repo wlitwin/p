@@ -11,9 +11,10 @@ import (
 	"github.com/walter/p/internal/knowledge"
 )
 
-// KnowledgeContentLoadedMsg carries the loaded content of a knowledge doc.
+// KnowledgeContentLoadedMsg carries the loaded and pre-rendered content.
 type KnowledgeContentLoadedMsg struct {
-	Content string
+	Content string   // raw markdown (kept for re-rendering on resize)
+	Lines   []string // pre-rendered lines from glamour
 }
 
 // KnowledgeView provides a scrollable read-only viewport for viewing a single
@@ -50,12 +51,14 @@ func (v *KnowledgeView) Init() tea.Cmd {
 func (v *KnowledgeView) loadContent() tea.Cmd {
 	dir := v.projectDir
 	name := v.docName
+	width := v.width
 	return func() tea.Msg {
 		content, err := knowledge.Read(dir, name)
 		if err != nil {
 			return ErrorMsg{Err: fmt.Errorf("reading %q: %w", name, err)}
 		}
-		return KnowledgeContentLoadedMsg{Content: content}
+		lines := renderMarkdownContent(content, width)
+		return KnowledgeContentLoadedMsg{Content: content, Lines: lines}
 	}
 }
 
@@ -65,17 +68,24 @@ func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		oldWidth := v.width
 		v.width = msg.Width
 		v.height = msg.Height
-		// Re-render if width changed (glamour word-wrap depends on width)
+		// Re-render async if width changed (glamour word-wrap depends on width)
 		if v.loaded && v.content != "" && msg.Width != oldWidth {
-			v.lines = v.renderContent(v.content)
+			content := v.content
+			width := msg.Width
+			return v, func() tea.Msg {
+				lines := renderMarkdownContent(content, width)
+				return KnowledgeContentLoadedMsg{Content: content, Lines: lines}
+			}
 		}
 		return v, nil
 
 	case KnowledgeContentLoadedMsg:
 		v.content = msg.Content
-		v.lines = v.renderContent(msg.Content)
+		v.lines = msg.Lines
 		v.loaded = true
-		v.scrollOffset = 0
+		if v.scrollOffset > v.maxScroll() {
+			v.scrollOffset = v.maxScroll()
+		}
 		return v, nil
 
 	case DataChangedMsg:
@@ -131,10 +141,44 @@ func (v *KnowledgeView) maxScroll() int {
 	return max(0, len(v.lines)-v.viewportHeight())
 }
 
-// renderContent renders markdown content using glamour for proper formatting
-// of tables, code blocks, lists, etc. YAML frontmatter is styled separately.
-func (v *KnowledgeView) renderContent(content string) []string {
-	// Split off YAML frontmatter
+// Cached glamour renderer — initialized once, reused across all renders.
+// Word wrap is set to a reasonable default; content is indented separately.
+var (
+	glamourRenderer     *glamour.TermRenderer
+	glamourRendererWrap int
+)
+
+// getGlamourRenderer returns a cached glamour renderer, creating one if needed
+// or if the word wrap width has changed significantly (>10 columns).
+func getGlamourRenderer(wordWrap int) *glamour.TermRenderer {
+	if glamourRenderer != nil && abs(glamourRendererWrap-wordWrap) < 10 {
+		return glamourRenderer
+	}
+
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle("dark"),
+		glamour.WithWordWrap(wordWrap),
+	)
+	if err != nil {
+		return nil
+	}
+
+	glamourRenderer = r
+	glamourRendererWrap = wordWrap
+	return r
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// renderMarkdownContent renders markdown content using glamour for proper
+// formatting of tables, code blocks, lists, etc. YAML frontmatter is styled
+// separately. This runs in a background goroutine to avoid blocking the UI.
+func renderMarkdownContent(content string, termWidth int) []string {
 	frontmatter, markdown := splitFrontmatter(content)
 
 	var lines []string
@@ -144,24 +188,19 @@ func (v *KnowledgeView) renderContent(content string) []string {
 		for _, line := range strings.Split(frontmatter, "\n") {
 			lines = append(lines, HelpStyle.Render("  "+line))
 		}
-		lines = append(lines, "") // blank separator
+		lines = append(lines, "")
 	}
 
-	// Render markdown body with glamour
 	if markdown != "" {
 		wordWrap := 100
-		if v.width > 0 {
-			wordWrap = max(40, v.width-6) // leave margin for indentation
+		if termWidth > 0 {
+			wordWrap = max(40, termWidth-6)
 		}
 
-		renderer, err := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(wordWrap),
-		)
-		if err == nil {
+		renderer := getGlamourRenderer(wordWrap)
+		if renderer != nil {
 			rendered, err := renderer.Render(markdown)
 			if err == nil {
-				// glamour output ends with trailing newlines; trim and split
 				rendered = strings.TrimRight(rendered, "\n")
 				for _, line := range strings.Split(rendered, "\n") {
 					lines = append(lines, "  "+line)
