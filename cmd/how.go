@@ -78,6 +78,7 @@ func buildHelpPrompt() string {
 		{"p done <project> <list> <id> [id...]", "Mark items done (supports multiple IDs)"},
 		{"p search [project] <query>", "Full-text search across todos and knowledge"},
 		{"p do <project> [list] [ids...] [-m 'message']", "Have AI implement todo items in the code repo"},
+		{"p agent <project> <list> [-i MAX] [-m 'message']", "Autonomous agent loop — works through a todo list until done"},
 		{"p plan <project> '<description>' [--also=other-project]", "Open-ended AI planning — creates multiple todos/knowledge"},
 		{"p ask <project> '<question>' [-c]", "Ask the AI about project state (read-only). -c continues last conversation"},
 		{"p save <project> [message...]", "Commit manual edits (Obsidian, text editor)"},

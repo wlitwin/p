@@ -67,7 +67,7 @@ func init() {
 
 	// Commands that take project + list (list completion covers both)
 	for _, cmd := range []*cobra.Command{
-		moveCmd, rmListCmd, archiveListCmd,
+		agentCmd, moveCmd, rmListCmd, archiveListCmd,
 		priorityCmd, dueCmd, tagCmd,
 	} {
 		cmd.ValidArgsFunction = listCompletionFunc
