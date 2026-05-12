@@ -1,7 +1,8 @@
 // Package theme provides preset color themes and applies them to the global
 // style variables in the tui package. It supports built-in presets (default,
-// high-contrast, light), individual color overrides, glamour markdown theme
-// configuration, and the NO_COLOR standard.
+// high-contrast, light, solarized, dracula, catppuccin, nord), individual
+// color overrides, glamour markdown theme configuration, and the NO_COLOR
+// standard.
 package theme
 
 import (
@@ -111,11 +112,103 @@ var Presets = map[string]*ColorPreset{
 		CountDone:   "240",
 		CountBlock:  "166",
 	},
+	"solarized": {
+		Green:       "#859900", // solarized green
+		Yellow:      "#b58900", // solarized yellow
+		Red:         "#dc322f", // solarized red
+		Dim:         "#586e75", // solarized base01
+		Cyan:        "#2aa198", // solarized cyan
+		Border:      "#6c71c4", // solarized violet
+		Open:        "#839496", // solarized base0
+		Done:        "#586e75", // solarized base01
+		Blocked:     "#cb4b16", // solarized orange
+		PriorityNow: "#dc322f", // solarized red
+		Backlog:     "#657b83", // solarized base00
+		Selected:    "#fdf6e3", // solarized base3
+		SelectedBG:  "#6c71c4", // solarized violet
+		Title:       "#268bd2", // solarized blue
+		Help:        "#657b83", // solarized base00
+		Error:       "#dc322f", // solarized red
+		Status:      "#859900", // solarized green
+		Cursor:      "#268bd2", // solarized blue
+		CountOpen:   "#839496", // solarized base0
+		CountDone:   "#586e75", // solarized base01
+		CountBlock:  "#cb4b16", // solarized orange
+	},
+	"dracula": {
+		Green:       "#50fa7b", // dracula green
+		Yellow:      "#f1fa8c", // dracula yellow
+		Red:         "#ff5555", // dracula red
+		Dim:         "#6272a4", // dracula comment
+		Cyan:        "#8be9fd", // dracula cyan
+		Border:      "#bd93f9", // dracula purple
+		Open:        "#f8f8f2", // dracula foreground
+		Done:        "#6272a4", // dracula comment
+		Blocked:     "#ffb86c", // dracula orange
+		PriorityNow: "#ff79c6", // dracula pink
+		Backlog:     "#6272a4", // dracula comment
+		Selected:    "#f8f8f2", // dracula foreground
+		SelectedBG:  "#bd93f9", // dracula purple
+		Title:       "#bd93f9", // dracula purple
+		Help:        "#6272a4", // dracula comment
+		Error:       "#ff5555", // dracula red
+		Status:      "#50fa7b", // dracula green
+		Cursor:      "#50fa7b", // dracula green
+		CountOpen:   "#f8f8f2", // dracula foreground
+		CountDone:   "#6272a4", // dracula comment
+		CountBlock:  "#ffb86c", // dracula orange
+	},
+	"catppuccin": {
+		Green:       "#a6e3a1", // catppuccin mocha green
+		Yellow:      "#f9e2af", // catppuccin mocha yellow
+		Red:         "#f38ba8", // catppuccin mocha red
+		Dim:         "#6c7086", // catppuccin mocha overlay0
+		Cyan:        "#94e2d5", // catppuccin mocha teal
+		Border:      "#cba6f7", // catppuccin mocha mauve
+		Open:        "#cdd6f4", // catppuccin mocha text
+		Done:        "#6c7086", // catppuccin mocha overlay0
+		Blocked:     "#fab387", // catppuccin mocha peach
+		PriorityNow: "#f38ba8", // catppuccin mocha red
+		Backlog:     "#7f849c", // catppuccin mocha overlay1
+		Selected:    "#1e1e2e", // catppuccin mocha base
+		SelectedBG:  "#cba6f7", // catppuccin mocha mauve
+		Title:       "#89b4fa", // catppuccin mocha blue
+		Help:        "#7f849c", // catppuccin mocha overlay1
+		Error:       "#f38ba8", // catppuccin mocha red
+		Status:      "#a6e3a1", // catppuccin mocha green
+		Cursor:      "#89b4fa", // catppuccin mocha blue
+		CountOpen:   "#cdd6f4", // catppuccin mocha text
+		CountDone:   "#6c7086", // catppuccin mocha overlay0
+		CountBlock:  "#fab387", // catppuccin mocha peach
+	},
+	"nord": {
+		Green:       "#a3be8c", // nord green (aurora)
+		Yellow:      "#ebcb8b", // nord yellow (aurora)
+		Red:         "#bf616a", // nord red (aurora)
+		Dim:         "#4c566a", // nord polar night 4
+		Cyan:        "#88c0d0", // nord frost 3
+		Border:      "#81a1c1", // nord frost 2
+		Open:        "#eceff4", // nord snow storm 3
+		Done:        "#4c566a", // nord polar night 4
+		Blocked:     "#d08770", // nord orange (aurora)
+		PriorityNow: "#bf616a", // nord red (aurora)
+		Backlog:     "#616e88", // dimmed nord
+		Selected:    "#eceff4", // nord snow storm 3
+		SelectedBG:  "#5e81ac", // nord frost 1
+		Title:       "#81a1c1", // nord frost 2
+		Help:        "#616e88", // dimmed nord
+		Error:       "#bf616a", // nord red (aurora)
+		Status:      "#a3be8c", // nord green (aurora)
+		Cursor:      "#88c0d0", // nord frost 3
+		CountOpen:   "#eceff4", // nord snow storm 3
+		CountDone:   "#4c566a", // nord polar night 4
+		CountBlock:  "#d08770", // nord orange (aurora)
+	},
 }
 
 // PresetNames returns the list of available theme preset names.
 func PresetNames() []string {
-	return []string{"default", "high-contrast", "light"}
+	return []string{"default", "high-contrast", "light", "solarized", "dracula", "catppuccin", "nord"}
 }
 
 // Apply configures all tui style variables based on the config's theme preset

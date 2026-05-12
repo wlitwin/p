@@ -189,11 +189,14 @@ func TestGlamourThemeSetting(t *testing.T) {
 
 func TestPresetNames(t *testing.T) {
 	names := PresetNames()
-	if len(names) < 3 {
-		t.Errorf("expected at least 3 preset names, got %d", len(names))
+	if len(names) < 7 {
+		t.Errorf("expected at least 7 preset names, got %d", len(names))
 	}
 
-	expected := map[string]bool{"default": true, "high-contrast": true, "light": true}
+	expected := map[string]bool{
+		"default": true, "high-contrast": true, "light": true,
+		"solarized": true, "dracula": true, "catppuccin": true, "nord": true,
+	}
 	for _, name := range names {
 		if !expected[name] {
 			t.Errorf("unexpected preset name: %s", name)

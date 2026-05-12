@@ -13,6 +13,7 @@ This guide covers all `p` commands with examples, organized by workflow.
 - [AI-Powered Workflows](#ai-powered-workflows)
 - [History & Version Control](#history--version-control)
 - [Configuration](#configuration)
+- [Theming & Colors](#theming--colors)
 - [Advanced Usage](#advanced-usage)
 - [Example Workflows](#example-workflows)
 
@@ -547,6 +548,19 @@ p project set api-service code_dir ~/code/api       # Link code repository
 p project set api-service description "The API"     # Set description
 ```
 
+### Theme and color config
+
+See [Theming & Colors](#theming--colors) for full details.
+
+```bash
+p config theme                       # Show current theme
+p config theme dracula               # Set theme preset
+p config colors.dim 248              # Override individual color
+p config glamour_theme dark          # Set markdown rendering theme
+p config --list                      # List available presets
+p config --preview                   # Preview presets with sample colors
+```
+
 ### Shell completions
 
 Generate completions for your shell:
@@ -564,6 +578,104 @@ Then restart your shell. Tab completion works for project names, list names, and
 ```bash
 p version                   # Full version info
 p version --short           # Just the version number
+```
+
+---
+
+## Theming & Colors
+
+`p` includes a global theming system that lets you customize all colors used in CLI output and the TUI. You can pick a preset, override individual colors, or disable color entirely.
+
+### Theme presets
+
+Set a theme with:
+
+```bash
+p config theme <name>
+```
+
+Available presets:
+
+| Preset | Description |
+|--------|-------------|
+| `default` | Balanced purple-accent theme, works well on most dark terminals |
+| `high-contrast` | Brighter colors for maximum readability on dark backgrounds |
+| `light` | Darker colors optimized for light terminal backgrounds |
+| `solarized` | Matches the [Solarized](https://ethanschoonover.com/solarized/) palette |
+| `dracula` | Matches the [Dracula](https://draculatheme.com/) palette |
+| `catppuccin` | Matches the [Catppuccin Mocha](https://catppuccin.com/) palette |
+| `nord` | Matches the [Nord](https://www.nordtheme.com/) palette |
+
+Browse and preview them:
+
+```bash
+p config --list                 # List presets, marks current with *
+p config --preview              # Show color samples for each preset
+```
+
+### Individual color overrides
+
+Override specific colors on top of any preset:
+
+```bash
+p config colors.dim 248              # ANSI 256 color code
+p config colors.accent "#bd93f9"     # Hex color
+p config colors.dim ""               # Clear override (use preset default)
+```
+
+Available color keys:
+
+| Key | Controls |
+|-----|----------|
+| `dim` | Completed items, metadata, backlog priority (CLI output) |
+| `done` | Done items in TUI + done count badges |
+| `help` | Help text, keybindings, status bar in TUI |
+| `accent` | Borders, titles, cursor, selection background |
+| `open` | Open items in TUI + open count badges |
+| `green` | Checkmarks `[x]`, status indicators |
+| `yellow` | Open state markers `[ ]` |
+| `red` | Dropped state markers `[-]` |
+| `cyan` | Priority "now" in CLI output |
+| `blocked` | Blocked items `[~]` + blocked count badges |
+| `priority_now` | "Now" priority in TUI |
+| `error` | Error messages |
+
+Colors accept **ANSI 256 codes** (e.g., `"242"`) or **hex codes** (e.g., `"#7C6F64"`).
+
+### Glamour markdown theme
+
+Control how markdown is rendered in `p show`, `p ai`, and the TUI knowledge viewer:
+
+```bash
+p config glamour_theme auto         # Auto-detect dark/light (default)
+p config glamour_theme dark         # Force dark theme
+p config glamour_theme light        # Force light theme
+p config glamour_theme notty        # Plain text, no styling
+```
+
+### Disabling color (NO_COLOR)
+
+`p` respects the [NO_COLOR](https://no-color.org/) standard. Set the `NO_COLOR` environment variable to any value to disable all color output:
+
+```bash
+NO_COLOR=1 p list                   # One-time
+export NO_COLOR=1                   # Permanent (add to shell profile)
+```
+
+When `NO_COLOR` is set, all lipgloss styling is stripped and glamour renders as plain text.
+
+### Example: config file
+
+Theme settings live in `~/.config/p/config.yaml` alongside other config:
+
+```yaml
+project_root: ~/projects
+claude_model: claude-opus-4-6
+theme: catppuccin
+glamour_theme: auto
+colors:
+  dim: "248"
+  accent: "#89b4fa"
 ```
 
 ---
