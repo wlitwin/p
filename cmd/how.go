@@ -88,6 +88,7 @@ func buildHelpPrompt() string {
 
 		// p project — project lifecycle
 		{"p project new <project> [--description '']", "Create a new project"},
+		{"p project rename <old-name> <new-name>", "Rename a project"},
 		{"p project archive/unarchive <project>", "Archive or unarchive a project"},
 		{"p project set <project> [key] [value]", "View or set project settings (description, code_dir)"},
 		{"p project describe <project> <text...>", "Set project description"},

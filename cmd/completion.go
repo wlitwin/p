@@ -47,7 +47,7 @@ func init() {
 	// p project subcommands that take a project name
 	for _, cmd := range []*cobra.Command{
 		archiveCmd, unarchiveCmd, logCmd, diffCmd, revertCmd,
-		describeCmd, setCmd,
+		describeCmd, setCmd, renameCmd,
 	} {
 		cmd.ValidArgsFunction = projectCompletionFunc
 	}
