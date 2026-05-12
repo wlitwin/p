@@ -104,7 +104,9 @@ func (v *TodoListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, GlobalKeyMap.Search):
-			// TODO: implement search filtering
+			return v, func() tea.Msg {
+				return NavigateMsg{To: ViewSearch}
+			}
 		}
 	}
 

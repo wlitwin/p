@@ -220,11 +220,33 @@ func (a *App) navigate(msg NavigateMsg) tea.Cmd {
 	case ViewProjectList:
 		a.activeView = NewProjectListView(a.projectRoot, a.width, ch)
 	case ViewTodoList:
+		// Check if we're Tab-switching from KnowledgeListView — if so,
+		// pop the stack instead of pushing a new view so we preserve state.
+		if a.restoreFromStack(ViewTodoList) {
+			// Send DataChanged to refresh data while keeping cursor position
+			var cmd tea.Cmd
+			a.activeView, cmd = a.activeView.Update(DataChangedMsg{})
+			return cmd
+		}
 		a.activeView = NewTodoListView(a.projectName, a.projectDir, a.width, ch)
 	case ViewItemList:
 		a.activeView = NewItemListView(a.projectName, a.projectDir, a.listName, a.width, ch)
 	case ViewItemDetail:
 		a.activeView = NewItemDetailView(a.projectName, a.projectDir, a.listName, msg.ItemID, a.width, ch)
+	case ViewKnowledgeList:
+		// Check if we're Tab-switching from TodoListView — if so,
+		// pop the stack instead of pushing a new view so we preserve state.
+		if a.restoreFromStack(ViewKnowledgeList) {
+			// Send DataChanged to refresh data while keeping cursor position
+			var cmd tea.Cmd
+			a.activeView, cmd = a.activeView.Update(DataChangedMsg{})
+			return cmd
+		}
+		a.activeView = NewKnowledgeListView(a.projectName, a.projectDir, a.width, ch)
+	case ViewKnowledgeView:
+		a.activeView = NewKnowledgeView(a.projectName, a.projectDir, msg.DocName, a.width, ch)
+	case ViewSearch:
+		a.activeView = NewSearchView(a.projectName, a.projectDir, a.width, ch)
 	default:
 		return nil
 	}
@@ -319,12 +341,56 @@ func (a *App) renderHelp() string {
 	help += HelpStyle.Render("    e  edit text  D  due date  t  tags  ↑↓  scroll") + "\n\n"
 
 	help += "  " + TitleStyle.Render("Todo Lists") + "\n"
-	help += HelpStyle.Render("    Tab  switch to knowledge") + "\n\n"
+	help += HelpStyle.Render("    Tab  switch to knowledge  /  search") + "\n\n"
+
+	help += "  " + TitleStyle.Render("Knowledge") + "\n"
+	help += HelpStyle.Render("    Enter  view doc    Tab  switch to todos") + "\n"
+	help += HelpStyle.Render("    /  search/filter   n  new doc") + "\n\n"
+
+	help += "  " + TitleStyle.Render("Knowledge Viewer") + "\n"
+	help += HelpStyle.Render("    ↑↓  scroll  PgUp/PgDn  half-page  g/G  top/bottom") + "\n\n"
+
+	help += "  " + TitleStyle.Render("Search") + "\n"
+	help += HelpStyle.Render("    Type to search  ↑↓  navigate  Enter  jump to result") + "\n\n"
 
 	help += HelpStyle.Render("  Press any key to close")
 
 	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center,
 		BorderStyle.Render(help))
+}
+
+// restoreFromStack searches the view stack for a matching view type and
+// restores it if found, removing it from the stack. This is used for Tab
+// switching between TodoListView and KnowledgeListView so that each view's
+// state is preserved across switches.
+func (a *App) restoreFromStack(viewType ViewType) bool {
+	for i := len(a.viewStack) - 1; i >= 0; i-- {
+		vs := a.viewStack[i]
+		var isMatch bool
+		switch viewType {
+		case ViewTodoList:
+			_, isMatch = vs.model.(*TodoListView)
+		case ViewKnowledgeList:
+			_, isMatch = vs.model.(*KnowledgeListView)
+		}
+		if isMatch {
+			// Restore this view and remove it from the stack
+			a.activeView = vs.model
+			a.projectName = vs.projectName
+			a.projectDir = vs.projectDir
+			a.listName = vs.listName
+			// Remove from stack
+			a.viewStack = append(a.viewStack[:i], a.viewStack[i+1:]...)
+			// Resize
+			if a.width > 0 && a.height > 0 {
+				a.activeView, _ = a.activeView.Update(tea.WindowSizeMsg{
+					Width: a.width, Height: a.height,
+				})
+			}
+			return true
+		}
+	}
+	return false
 }
 
 // ctx returns a background context for service operations.

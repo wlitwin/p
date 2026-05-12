@@ -102,7 +102,7 @@ func (v *ProjectListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, GlobalKeyMap.Search):
-			// TODO: implement search filtering
+			// Search not available at project level — need a project context
 		}
 	}
 
