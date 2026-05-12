@@ -38,6 +38,7 @@ type aiTaskConfig struct {
 	Mode            ai.Mode
 	CommandName     string
 	CommitMsg       string
+	Continue        bool     // resume last conversation
 	AlsoNames       []string // additional project names for multi-project context
 	ContextPatterns []string // knowledge doc glob patterns; nil means include all
 }
@@ -88,7 +89,7 @@ func runAIWithCommit(ctx context.Context, taskCfg aiTaskConfig) error {
 		task.AlsoNames = append(task.AlsoNames, name)
 	}
 
-	if err := ai.Run(ctx, pBinary, claudePath, model, task, ai.RunOptions{Stderr: claudeStderr()}); err != nil {
+	if err := ai.Run(ctx, pBinary, claudePath, model, task, ai.RunOptions{Continue: taskCfg.Continue, Stderr: claudeStderr()}); err != nil {
 		return err
 	}
 

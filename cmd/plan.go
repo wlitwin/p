@@ -27,6 +27,7 @@ Examples:
 		}
 		also, _ := cmd.Flags().GetStringSlice("also")
 		listName, _ := cmd.Flags().GetString("list")
+		cont, _ := cmd.Flags().GetBool("continue")
 
 		// Resolve context patterns from the target list if specified
 		dir, err := project.Resolve(cfg.ProjectRoot, args[0])
@@ -51,6 +52,7 @@ Examples:
 			Mode:            ai.ModePlan,
 			CommandName:     "plan",
 			CommitMsg:       fmt.Sprintf("p: AI plan — %s", display.Truncate(args[1], 60)),
+			Continue:        cont,
 			AlsoNames:       also,
 			ContextPatterns: contextPatterns,
 		})
@@ -58,6 +60,7 @@ Examples:
 }
 
 func init() {
+	planCmd.Flags().BoolP("continue", "c", false, "Continue the previous conversation")
 	planCmd.Flags().StringSlice("also", nil, "Include context from other projects (comma-separated)")
 	planCmd.Flags().StringP("list", "l", "", "Target todo list (uses its context patterns for knowledge filtering)")
 	rootCmd.AddCommand(planCmd)
