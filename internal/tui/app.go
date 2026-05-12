@@ -1,0 +1,308 @@
+package tui
+
+import (
+	"context"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/walter/p/internal/config"
+)
+
+// ViewState captures the state needed to restore a view when navigating back.
+type ViewState struct {
+	model       tea.Model
+	projectName string
+	projectDir  string
+	listName    string
+}
+
+// App is the root bubbletea model that manages view navigation and shared state.
+type App struct {
+	// Navigation stack for back navigation
+	viewStack []ViewState
+
+	// Shared state
+	config      config.Config
+	projectRoot string
+
+	// Current context
+	projectName string
+	projectDir  string
+	listName    string
+
+	// Active view model
+	activeView tea.Model
+
+	// Window dimensions
+	width  int
+	height int
+
+	// Help overlay
+	showHelp bool
+
+	// Status/error display
+	statusMsg string
+	errorMsg  string
+
+	// Quitting flag
+	quitting bool
+}
+
+// NewApp creates a new App model with the given configuration.
+func NewApp(cfg config.Config) *App {
+	return &App{
+		config:      cfg,
+		projectRoot: cfg.ProjectRoot,
+	}
+}
+
+// StartAtProjectList initializes the app to show the project list.
+func (a *App) StartAtProjectList() {
+	a.activeView = NewProjectListView(a.projectRoot, a.width, a.contentHeight())
+}
+
+// StartAtProject initializes the app to show a specific project's todo lists.
+func (a *App) StartAtProject(projectName, projectDir string) {
+	a.projectName = projectName
+	a.projectDir = projectDir
+	a.activeView = NewTodoListView(projectName, projectDir, a.width, a.contentHeight())
+}
+
+// StartAtList initializes the app to show a specific todo list's items.
+func (a *App) StartAtList(projectName, projectDir, listName string) {
+	a.projectName = projectName
+	a.projectDir = projectDir
+	a.listName = listName
+	a.activeView = NewItemListView(projectName, projectDir, listName, a.width, a.contentHeight())
+}
+
+func (a *App) contentHeight() int {
+	h := a.height - 2 // reserve space for status bar
+	if h < 5 {
+		h = 5
+	}
+	return h
+}
+
+// Init implements tea.Model.
+func (a *App) Init() tea.Cmd {
+	if a.activeView == nil {
+		a.StartAtProjectList()
+	}
+	return a.activeView.Init()
+}
+
+// Update implements tea.Model.
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		a.width = msg.Width
+		a.height = msg.Height
+		// Forward resize to active view
+		if a.activeView != nil {
+			var cmd tea.Cmd
+			a.activeView, cmd = a.activeView.Update(msg)
+			return a, cmd
+		}
+		return a, nil
+
+	case tea.KeyMsg:
+		// Help overlay: any key closes it
+		if a.showHelp {
+			a.showHelp = false
+			return a, nil
+		}
+
+		// ctrl+c always quits
+		if msg.String() == "ctrl+c" {
+			a.quitting = true
+			return a, tea.Quit
+		}
+
+		// Check if view is in input mode — if so, don't intercept q/?
+		inInput := false
+		if iv, ok := a.activeView.(interface{ IsInputMode() bool }); ok {
+			inInput = iv.IsInputMode()
+		}
+
+		if !inInput {
+			switch msg.String() {
+			case "q":
+				a.quitting = true
+				return a, tea.Quit
+			case "?":
+				a.showHelp = !a.showHelp
+				return a, nil
+			}
+		}
+
+		// Forward all other keys to active view
+		if a.activeView != nil {
+			var cmd tea.Cmd
+			a.activeView, cmd = a.activeView.Update(msg)
+			return a, cmd
+		}
+
+	case NavigateMsg:
+		return a, a.navigate(msg)
+
+	case GoBackMsg:
+		return a, a.goBack()
+
+	case ErrorMsg:
+		a.errorMsg = msg.Err.Error()
+		a.statusMsg = ""
+		return a, nil
+
+	case StatusMsg:
+		a.statusMsg = msg.Text
+		a.errorMsg = ""
+		return a, nil
+
+	default:
+		// Forward other messages (e.g. data loaded) to active view
+		if a.activeView != nil {
+			var cmd tea.Cmd
+			a.activeView, cmd = a.activeView.Update(msg)
+			return a, cmd
+		}
+	}
+
+	return a, nil
+}
+
+func (a *App) navigate(msg NavigateMsg) tea.Cmd {
+	// Push current state onto the view stack
+	if a.activeView != nil {
+		a.viewStack = append(a.viewStack, ViewState{
+			model:       a.activeView,
+			projectName: a.projectName,
+			projectDir:  a.projectDir,
+			listName:    a.listName,
+		})
+	}
+
+	// Update navigation context
+	if msg.ProjectName != "" {
+		a.projectName = msg.ProjectName
+	}
+	if msg.ProjectDir != "" {
+		a.projectDir = msg.ProjectDir
+	}
+	if msg.ListName != "" {
+		a.listName = msg.ListName
+	}
+
+	// Clear messages on navigation
+	a.statusMsg = ""
+	a.errorMsg = ""
+
+	ch := a.contentHeight()
+
+	switch msg.To {
+	case ViewProjectList:
+		a.activeView = NewProjectListView(a.projectRoot, a.width, ch)
+	case ViewTodoList:
+		a.activeView = NewTodoListView(a.projectName, a.projectDir, a.width, ch)
+	case ViewItemList:
+		a.activeView = NewItemListView(a.projectName, a.projectDir, a.listName, a.width, ch)
+	default:
+		return nil
+	}
+
+	return a.activeView.Init()
+}
+
+func (a *App) goBack() tea.Cmd {
+	if len(a.viewStack) == 0 {
+		a.quitting = true
+		return tea.Quit
+	}
+
+	// Pop from view stack
+	prev := a.viewStack[len(a.viewStack)-1]
+	a.viewStack = a.viewStack[:len(a.viewStack)-1]
+
+	a.activeView = prev.model
+	a.projectName = prev.projectName
+	a.projectDir = prev.projectDir
+	a.listName = prev.listName
+
+	// Clear messages
+	a.statusMsg = ""
+	a.errorMsg = ""
+
+	// Reload data and resize the restored view
+	var cmds []tea.Cmd
+	if a.width > 0 && a.height > 0 {
+		var cmd tea.Cmd
+		a.activeView, cmd = a.activeView.Update(tea.WindowSizeMsg{
+			Width: a.width, Height: a.height,
+		})
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	// Trigger a data reload so restored view shows fresh data
+	var cmd tea.Cmd
+	a.activeView, cmd = a.activeView.Update(DataChangedMsg{})
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	return tea.Batch(cmds...)
+}
+
+// View implements tea.Model.
+func (a *App) View() string {
+	if a.quitting {
+		return ""
+	}
+
+	if a.showHelp {
+		return a.renderHelp()
+	}
+
+	var content string
+	if a.activeView != nil {
+		content = a.activeView.View()
+	}
+
+	// Status bar at the bottom
+	if a.errorMsg != "" {
+		content += "\n" + ErrorStyle.Render("  ⚠ "+a.errorMsg)
+	} else if a.statusMsg != "" {
+		content += "\n" + StatusStyle.Render("  "+a.statusMsg)
+	}
+
+	return content
+}
+
+func (a *App) renderHelp() string {
+	help := TitleStyle.Render("Keyboard Shortcuts") + "\n\n"
+
+	help += "  " + TitleStyle.Render("Global") + "\n"
+	help += HelpStyle.Render("    q/Ctrl+C  quit        Esc  back        ?  toggle help") + "\n\n"
+
+	help += "  " + TitleStyle.Render("Navigation") + "\n"
+	help += HelpStyle.Render("    ↑/k  up    ↓/j  down    Enter  select") + "\n\n"
+
+	help += "  " + TitleStyle.Render("Item List") + "\n"
+	help += HelpStyle.Render("    Space  toggle done    o  open    b  block    x  done") + "\n"
+	help += HelpStyle.Render("    p  cycle priority     n  new item") + "\n"
+	help += HelpStyle.Render("    f  cycle filter       0-3  filter by state") + "\n\n"
+
+	help += "  " + TitleStyle.Render("Todo Lists") + "\n"
+	help += HelpStyle.Render("    Tab  switch to knowledge") + "\n\n"
+
+	help += HelpStyle.Render("  Press any key to close")
+
+	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center,
+		BorderStyle.Render(help))
+}
+
+// ctx returns a background context for service operations.
+func ctx() context.Context {
+	return context.Background()
+}
