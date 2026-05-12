@@ -8,6 +8,15 @@ import "github.com/charmbracelet/lipgloss"
 // Set by the theme system. Values: "auto", "dark", "light", "notty".
 var GlamourThemeSetting = "auto"
 
+// ThemeApplyFunc is set by the theme package to allow runtime theme changes
+// without an import cycle (tui -> theme -> tui). When set, it accepts a
+// config.Config and reapplies all styles.
+var ThemeApplyFunc func(cfg interface{})
+
+// ThemePresetNames is set by the theme package with the list of available
+// preset names, enabling theme cycling in the TUI without importing theme.
+var ThemePresetNames []string
+
 // Base styles used by both CLI output and TUI views.
 // These are var (not const) so the theme system can reassign them at startup.
 var (

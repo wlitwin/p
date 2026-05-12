@@ -14,7 +14,8 @@ func renderContextHelp(viewType ViewType) string {
 
 	// Global — always shown
 	sb.WriteString("  " + TitleStyle.Render("Global") + "\n")
-	sb.WriteString(HelpStyle.Render("    q/Ctrl+C  quit        Esc  back        ?  toggle help") + "\n\n")
+	sb.WriteString(HelpStyle.Render("    q/Ctrl+C  quit        Esc  back        ?  toggle help") + "\n")
+	sb.WriteString(HelpStyle.Render("    T  cycle theme") + "\n\n")
 
 	sb.WriteString("  " + TitleStyle.Render("Navigation") + "\n")
 	sb.WriteString(HelpStyle.Render("    ↑/k  up    ↓/j  down    Enter  select") + "\n\n")

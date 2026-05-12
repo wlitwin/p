@@ -211,6 +211,17 @@ func PresetNames() []string {
 	return []string{"default", "high-contrast", "light", "solarized", "dracula", "catppuccin", "nord"}
 }
 
+func init() {
+	// Register the Apply function and preset names with the tui package
+	// so the TUI can trigger theme changes at runtime without an import cycle.
+	tui.ThemeApplyFunc = func(c interface{}) {
+		if cfg, ok := c.(config.Config); ok {
+			Apply(cfg)
+		}
+	}
+	tui.ThemePresetNames = PresetNames()
+}
+
 // Apply configures all tui style variables based on the config's theme preset
 // and individual color overrides. It also handles the NO_COLOR env var and
 // stores the glamour theme setting. Must be called after config load and before

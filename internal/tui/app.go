@@ -140,6 +140,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, func() tea.Msg {
 					return NavigateMsg{To: ViewStatus}
 				}
+			case "T":
+				// Cycle through theme presets
+				return a, a.cycleTheme()
 			}
 		}
 
@@ -191,6 +194,43 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return a, nil
+}
+
+// cycleTheme switches to the next theme preset and applies it immediately.
+func (a *App) cycleTheme() tea.Cmd {
+	names := ThemePresetNames
+	if len(names) == 0 || ThemeApplyFunc == nil {
+		return func() tea.Msg {
+			return StatusMsg{Text: "Theme cycling not available"}
+		}
+	}
+
+	// Find current theme index
+	current := a.config.Theme
+	if current == "" {
+		current = "default"
+	}
+	idx := 0
+	for i, name := range names {
+		if name == current {
+			idx = i
+			break
+		}
+	}
+
+	// Cycle to next
+	next := names[(idx+1)%len(names)]
+	a.config.Theme = next
+
+	// Apply the theme — styles update immediately, next View() picks them up
+	ThemeApplyFunc(a.config)
+
+	// Invalidate cached glamour renderer so it picks up new glamour theme
+	glamourRenderer = nil
+
+	return func() tea.Msg {
+		return StatusMsg{Text: "Theme: " + next}
+	}
 }
 
 func (a *App) navigate(msg NavigateMsg) tea.Cmd {
