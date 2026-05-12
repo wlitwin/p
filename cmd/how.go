@@ -83,6 +83,7 @@ func buildHelpPrompt() string {
 		{"p ask <project> '<question>' [-c]", "Ask the AI about project state (read-only). -c continues last conversation"},
 		{"p save <project> [message...]", "Commit manual edits (Obsidian, text editor)"},
 		{"p how <question>", "This command — ask how to do something"},
+		{"p aliases [bash|zsh|fish]", "Print shell aliases (eval \"$(p aliases)\" in your profile)"},
 		{"p init", "Set up p — configure project root directory"},
 		{"p config [key] [value]", "View or set global config (project_root, claude_path, claude_model)"},
 
