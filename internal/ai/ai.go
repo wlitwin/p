@@ -461,7 +461,7 @@ func todoInstructions(task Task) string {
 	if task.ListName != "" {
 		fmt.Fprintf(&sb, "- Add it to the list \"%s\".\n", task.ListName)
 	} else {
-		sb.WriteString("- Choose the most appropriate existing list, or create a new one if none fit.\n")
+		sb.WriteString("- Choose the most appropriate existing list, or create a new one if none fit. Lists support subdirectory paths (e.g., `sprint/week-1`, `team/backend`) for organization.\n")
 	}
 	sb.WriteString("- If it makes sense as a sub-item of an existing todo, nest it using parent_id.\n")
 	sb.WriteString("- Word the todo clearly and concisely as an actionable task.\n")
