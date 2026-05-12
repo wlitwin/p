@@ -202,6 +202,18 @@ func (v *ItemListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.cursor++
 			}
 
+		// Open detail view
+		case key.Matches(msg, NavKeyMap.Enter):
+			id := v.selectedID()
+			if id != "" {
+				return v, func() tea.Msg {
+					return NavigateMsg{
+						To:     ViewItemDetail,
+						ItemID: id,
+					}
+				}
+			}
+
 		// State changes
 		case key.Matches(msg, ItemListKeyMap.ToggleDone):
 			return v, v.toggleDone()

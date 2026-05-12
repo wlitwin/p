@@ -223,6 +223,8 @@ func (a *App) navigate(msg NavigateMsg) tea.Cmd {
 		a.activeView = NewTodoListView(a.projectName, a.projectDir, a.width, ch)
 	case ViewItemList:
 		a.activeView = NewItemListView(a.projectName, a.projectDir, a.listName, a.width, ch)
+	case ViewItemDetail:
+		a.activeView = NewItemDetailView(a.projectName, a.projectDir, a.listName, msg.ItemID, a.width, ch)
 	default:
 		return nil
 	}
@@ -309,7 +311,12 @@ func (a *App) renderHelp() string {
 	help += HelpStyle.Render("    Space/d  toggle done  o  open    b  block    x  done") + "\n"
 	help += HelpStyle.Render("    p  cycle priority     n  new item    e  edit text") + "\n"
 	help += HelpStyle.Render("    D  due date   t  tags   m  move to list   r  remove") + "\n"
-	help += HelpStyle.Render("    f  cycle filter  0-3  filter by state  P  priority filter") + "\n\n"
+	help += HelpStyle.Render("    f  cycle filter  0-3  filter by state  P  priority filter") + "\n"
+	help += HelpStyle.Render("    Enter  open item detail") + "\n\n"
+
+	help += "  " + TitleStyle.Render("Item Detail") + "\n"
+	help += HelpStyle.Render("    d  toggle done  o/b/x  state  p  priority") + "\n"
+	help += HelpStyle.Render("    e  edit text  D  due date  t  tags  ↑↓  scroll") + "\n\n"
 
 	help += "  " + TitleStyle.Render("Todo Lists") + "\n"
 	help += HelpStyle.Render("    Tab  switch to knowledge") + "\n\n"
