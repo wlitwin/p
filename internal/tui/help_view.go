@@ -168,8 +168,13 @@ func renderContextHelp(viewType ViewType) string {
 		entries := []helpEntry{
 			{"Enter", "view doc"},
 			{"Tab", "switch to todos"},
-			{"/", "search/filter"},
+			{"/", "search/filter (#tag)"},
 			{"n", "new doc"},
+			{"d", "delete doc"},
+			{"a", "archive doc"},
+			{"r", "rename doc"},
+			{"A", "toggle archived view"},
+			{"R", "restore (archived)"},
 		}
 		sb.WriteString(HelpStyle.Render(formatHelpColumns(entries, 2, 52)))
 
@@ -180,6 +185,9 @@ func renderContextHelp(viewType ViewType) string {
 			{"PgUp/PgDn", "half page"},
 			{"g", "top"},
 			{"G", "bottom"},
+			{"d", "delete doc"},
+			{"a", "archive doc"},
+			{"r", "rename doc"},
 		}
 		sb.WriteString(HelpStyle.Render(formatHelpColumns(entries, 2, 52)))
 

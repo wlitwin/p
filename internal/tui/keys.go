@@ -186,3 +186,33 @@ var ItemListKeyMap = struct {
 		key.WithHelp("w", "wrap/unwrap"),
 	),
 }
+
+// KnowledgeListKeyMap defines keybindings for the knowledge list view.
+var KnowledgeListKeyMap = struct {
+	Delete         key.Binding
+	Archive        key.Binding
+	Rename         key.Binding
+	ToggleArchived key.Binding
+	Restore        key.Binding
+}{
+	Delete: key.NewBinding(
+		key.WithKeys("d"),
+		key.WithHelp("d", "delete"),
+	),
+	Archive: key.NewBinding(
+		key.WithKeys("a"),
+		key.WithHelp("a", "archive"),
+	),
+	Rename: key.NewBinding(
+		key.WithKeys("r"),
+		key.WithHelp("r", "rename"),
+	),
+	ToggleArchived: key.NewBinding(
+		key.WithKeys("A"),
+		key.WithHelp("A", "toggle archived"),
+	),
+	Restore: key.NewBinding(
+		key.WithKeys("R"),
+		key.WithHelp("R", "restore"),
+	),
+}

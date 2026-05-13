@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -9,8 +12,16 @@ import (
 	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
+	"github.com/walter/p/internal/lock"
+	"github.com/walter/p/internal/service"
 )
+
+// KnowledgeRenamedMsg signals that the doc was renamed — view updates its title.
+type KnowledgeRenamedMsg struct {
+	NewName string
+}
 
 // KnowledgeContentLoadedMsg carries the loaded and pre-rendered content.
 type KnowledgeContentLoadedMsg struct {
@@ -32,6 +43,17 @@ type KnowledgeView struct {
 	scrollOffset int
 	width        int
 	height       int
+
+	// Confirmation prompt for destructive actions
+	confirmMode   bool
+	confirmPrompt string
+	confirmAction func() tea.Cmd
+
+	// Inline input for rename
+	inputMode   bool
+	inputPrompt string
+	inputValue  string
+	inputAction func(value string) tea.Cmd
 }
 
 // NewKnowledgeView creates a new knowledge view for the given document.
@@ -43,6 +65,11 @@ func NewKnowledgeView(projectName, projectDir, docName string, width, height int
 		width:       width,
 		height:      height,
 	}
+}
+
+// IsInputMode reports whether the view is in an interactive mode.
+func (v *KnowledgeView) IsInputMode() bool {
+	return v.confirmMode || v.inputMode
 }
 
 func (v *KnowledgeView) Init() tea.Cmd {
@@ -60,6 +87,55 @@ func (v *KnowledgeView) loadContent() tea.Cmd {
 		}
 		lines := renderMarkdownContent(content, width)
 		return KnowledgeContentLoadedMsg{Content: content, Lines: lines}
+	}
+}
+
+func (v *KnowledgeView) handleConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		v.confirmMode = false
+		action := v.confirmAction
+		v.confirmPrompt = ""
+		v.confirmAction = nil
+		if action != nil {
+			return v, action()
+		}
+		return v, nil
+	case "n", "N", "esc":
+		v.confirmMode = false
+		v.confirmPrompt = ""
+		v.confirmAction = nil
+		return v, nil
+	}
+	return v, nil
+}
+
+func (v *KnowledgeView) handleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		v.inputMode = false
+		v.inputValue = ""
+		return v, nil
+	case "enter":
+		v.inputMode = false
+		value := v.inputValue
+		action := v.inputAction
+		v.inputValue = ""
+		v.inputAction = nil
+		if value != "" && action != nil {
+			return v, action(value)
+		}
+		return v, nil
+	case "backspace":
+		if len(v.inputValue) > 0 {
+			v.inputValue = v.inputValue[:len(v.inputValue)-1]
+		}
+		return v, nil
+	default:
+		if len(msg.String()) == 1 {
+			v.inputValue += msg.String()
+		}
+		return v, nil
 	}
 }
 
@@ -92,7 +168,21 @@ func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case DataChangedMsg:
 		return v, v.loadContent()
 
+	case KnowledgeRenamedMsg:
+		v.docName = msg.NewName
+		return v, v.loadContent()
+
 	case tea.KeyMsg:
+		// Confirmation mode
+		if v.confirmMode {
+			return v.handleConfirm(msg)
+		}
+
+		// Input mode (rename)
+		if v.inputMode {
+			return v.handleInput(msg)
+		}
+
 		switch {
 		case key.Matches(msg, GlobalKeyMap.Back):
 			return v, func() tea.Msg { return GoBackMsg{} }
@@ -128,6 +218,24 @@ func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, NavKeyMap.Bottom):
 			v.scrollOffset = v.maxScroll()
+
+		case msg.String() == "d":
+			v.confirmMode = true
+			v.confirmPrompt = fmt.Sprintf("Delete %q? (y/n)", v.docName)
+			v.confirmAction = func() tea.Cmd {
+				return v.doDeleteDoc()
+			}
+
+		case msg.String() == "a":
+			return v, v.doArchiveDoc()
+
+		case msg.String() == "r":
+			v.inputMode = true
+			v.inputPrompt = "Rename to: "
+			v.inputValue = v.docName
+			v.inputAction = func(newName string) tea.Cmd {
+				return v.doRenameDoc(newName)
+			}
 		}
 	}
 
@@ -140,6 +248,74 @@ func (v *KnowledgeView) viewportHeight() int {
 
 func (v *KnowledgeView) maxScroll() int {
 	return max(0, len(v.lines)-v.viewportHeight())
+}
+
+func (v *KnowledgeView) doDeleteDoc() tea.Cmd {
+	dir := v.projectDir
+	name := v.docName
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		if err := service.KnowledgeDelete(ctx(), dir, name); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		_ = git.CommitAll(context.Background(), dir, fmt.Sprintf("tui: delete knowledge doc %s", name))
+		// Navigate back since the doc no longer exists
+		return GoBackMsg{}
+	}
+}
+
+func (v *KnowledgeView) doArchiveDoc() tea.Cmd {
+	dir := v.projectDir
+	name := v.docName
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		src := knowledge.FilePath(dir, name)
+		archiveDir := filepath.Join(knowledge.Dir(dir), ".archive")
+		dst := filepath.Join(archiveDir, filepath.Base(src))
+
+		if _, err := os.Stat(src); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("doc %q not found", name)}
+		}
+		if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("creating archive dir: %w", err)}
+		}
+		if err := os.Rename(src, dst); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("archiving: %w", err)}
+		}
+
+		_ = git.CommitAll(context.Background(), dir, fmt.Sprintf("tui: archive knowledge doc %s", name))
+		return GoBackMsg{}
+	}
+}
+
+func (v *KnowledgeView) doRenameDoc(newName string) tea.Cmd {
+	dir := v.projectDir
+	oldName := v.docName
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		if err := service.KnowledgeRename(ctx(), dir, oldName, newName); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		_ = git.CommitAll(context.Background(), dir, fmt.Sprintf("tui: rename %s → %s", oldName, newName))
+		return KnowledgeRenamedMsg{NewName: newName}
+	}
 }
 
 // Cached glamour renderer — initialized once, reused across all renders.
@@ -304,7 +480,14 @@ func (v *KnowledgeView) View() string {
 		fmt.Fprintf(&sb, "%s\n", HelpStyle.Render(fmt.Sprintf("  ── %d%% ──", scrollPct)))
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑↓ scroll  PgUp/PgDn half-page  g/G top/bottom  Esc back"))
+	if v.inputMode {
+		cursorChar := CursorStyle.Render("█")
+		sb.WriteString("\n" + HelpStyle.Render("  "+v.inputPrompt) + v.inputValue + cursorChar)
+	} else if v.confirmMode {
+		sb.WriteString("\n" + ErrorStyle.Render("  "+v.confirmPrompt))
+	} else {
+		sb.WriteString("\n" + HelpStyle.Render("  ↑↓ scroll  PgUp/PgDn half-page  g/G top/bottom  d delete  a archive  r rename  Esc back"))
+	}
 
 	return sb.String()
 }

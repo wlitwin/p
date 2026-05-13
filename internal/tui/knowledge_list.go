@@ -1,13 +1,18 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
+	"github.com/walter/p/internal/lock"
+	"github.com/walter/p/internal/service"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -46,6 +51,14 @@ type KnowledgeListView struct {
 	searchMode  bool
 	searchQuery string
 	filtered    []KnowledgeDocInfo
+
+	// Confirmation prompt for destructive actions
+	confirmMode   bool
+	confirmPrompt string
+	confirmAction func() tea.Cmd
+
+	// Archive view toggle
+	showArchived bool
 }
 
 // NewKnowledgeListView creates a new knowledge list view for the given project.
@@ -60,7 +73,7 @@ func NewKnowledgeListView(projectName, projectDir string, width, height int) *Kn
 
 // IsInputMode reports whether the view is in text input mode.
 func (v *KnowledgeListView) IsInputMode() bool {
-	return v.inputMode || v.searchMode
+	return v.inputMode || v.searchMode || v.confirmMode
 }
 
 func (v *KnowledgeListView) Init() tea.Cmd {
@@ -69,8 +82,16 @@ func (v *KnowledgeListView) Init() tea.Cmd {
 
 func (v *KnowledgeListView) loadDocs() tea.Cmd {
 	dir := v.projectDir
+	showArchived := v.showArchived
 	return func() tea.Msg {
-		names, err := knowledge.ListFiles(dir)
+		var names []string
+		var err error
+
+		if showArchived {
+			names, err = listArchivedKnowledgeDocs(dir)
+		} else {
+			names, err = knowledge.ListFiles(dir)
+		}
 		if err != nil {
 			return ErrorMsg{Err: fmt.Errorf("loading knowledge docs: %w", err)}
 		}
@@ -80,20 +101,47 @@ func (v *KnowledgeListView) loadDocs() tea.Cmd {
 			info := KnowledgeDocInfo{Name: name}
 
 			// Get file size
-			path := knowledge.FilePath(dir, name)
+			var path string
+			if showArchived {
+				path = filepath.Join(knowledge.Dir(dir), ".archive", name+".md")
+			} else {
+				path = knowledge.FilePath(dir, name)
+			}
 			if stat, err := os.Stat(path); err == nil {
 				info.Size = stat.Size()
 			}
 
 			// Extract tags from content
-			if content, err := knowledge.Read(dir, name); err == nil {
-				info.Tags = knowledge.ExtractTags(content)
+			if content, err := os.ReadFile(path); err == nil {
+				info.Tags = knowledge.ExtractTags(string(content))
 			}
 
 			docs = append(docs, info)
 		}
 		return KnowledgeDocsLoadedMsg{Docs: docs}
 	}
+}
+
+// listArchivedKnowledgeDocs returns names of docs in knowledge/.archive/.
+func listArchivedKnowledgeDocs(projectDir string) ([]string, error) {
+	archiveDir := filepath.Join(knowledge.Dir(projectDir), ".archive")
+	if _, err := os.Stat(archiveDir); os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	entries, err := os.ReadDir(archiveDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		names = append(names, strings.TrimSuffix(e.Name(), ".md"))
+	}
+	return names, nil
 }
 
 func (v *KnowledgeListView) visibleDocs() []KnowledgeDocInfo {
@@ -110,19 +158,36 @@ func (v *KnowledgeListView) applySearch() {
 	}
 	query := strings.ToLower(v.searchQuery)
 	v.filtered = nil
-	for _, doc := range v.docs {
-		nameMatch := strings.Contains(strings.ToLower(doc.Name), query)
-		tagMatch := false
-		for _, tag := range doc.Tags {
-			if strings.Contains(strings.ToLower(tag), query) {
-				tagMatch = true
-				break
+
+	// Tag search: #tag prefix filters by matching doc tags
+	if tagQuery, ok := strings.CutPrefix(query, "#"); ok {
+		if tagQuery == "" {
+			return
+		}
+		for _, doc := range v.docs {
+			for _, tag := range doc.Tags {
+				if strings.Contains(strings.ToLower(tag), tagQuery) {
+					v.filtered = append(v.filtered, doc)
+					break
+				}
 			}
 		}
-		if nameMatch || tagMatch {
-			v.filtered = append(v.filtered, doc)
+	} else {
+		for _, doc := range v.docs {
+			nameMatch := strings.Contains(strings.ToLower(doc.Name), query)
+			tagMatch := false
+			for _, tag := range doc.Tags {
+				if strings.Contains(strings.ToLower(tag), query) {
+					tagMatch = true
+					break
+				}
+			}
+			if nameMatch || tagMatch {
+				v.filtered = append(v.filtered, doc)
+			}
 		}
 	}
+
 	if v.cursor >= len(v.filtered) {
 		v.cursor = max(0, len(v.filtered)-1)
 	}
@@ -157,6 +222,11 @@ func (v *KnowledgeListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return v, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
+		// Confirmation mode
+		if v.confirmMode {
+			return v.handleConfirm(msg)
+		}
+
 		// Input mode for creating new docs
 		if v.inputMode {
 			return v.handleInput(msg)
@@ -229,6 +299,55 @@ func (v *KnowledgeListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.inputPrompt = "New doc name: "
 			v.inputValue = ""
 			v.inputAction = v.createDoc
+
+		case msg.String() == "d":
+			visible := v.visibleDocs()
+			if len(visible) > 0 && v.cursor < len(visible) {
+				doc := visible[v.cursor]
+				v.confirmMode = true
+				v.confirmPrompt = fmt.Sprintf("Delete %q? (y/n)", doc.Name)
+				v.confirmAction = func() tea.Cmd {
+					return v.doDeleteDoc(doc.Name)
+				}
+			}
+
+		case msg.String() == "a":
+			if !v.showArchived {
+				visible := v.visibleDocs()
+				if len(visible) > 0 && v.cursor < len(visible) {
+					doc := visible[v.cursor]
+					return v, v.doArchiveDoc(doc.Name)
+				}
+			}
+
+		case msg.String() == "r":
+			visible := v.visibleDocs()
+			if len(visible) > 0 && v.cursor < len(visible) {
+				doc := visible[v.cursor]
+				v.inputMode = true
+				v.inputPrompt = "Rename to: "
+				v.inputValue = doc.Name
+				v.inputAction = func(newName string) tea.Cmd {
+					return v.doRenameDoc(doc.Name, newName)
+				}
+			}
+
+		case msg.String() == "A":
+			v.showArchived = !v.showArchived
+			v.cursor = 0
+			v.searchMode = false
+			v.searchQuery = ""
+			v.filtered = nil
+			return v, v.loadDocs()
+
+		case msg.String() == "R":
+			if v.showArchived {
+				visible := v.visibleDocs()
+				if len(visible) > 0 && v.cursor < len(visible) {
+					doc := visible[v.cursor]
+					return v, v.doRestoreDoc(doc.Name)
+				}
+			}
 		}
 	}
 
@@ -314,6 +433,26 @@ func (v *KnowledgeListView) handleSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (v *KnowledgeListView) handleConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		v.confirmMode = false
+		action := v.confirmAction
+		v.confirmPrompt = ""
+		v.confirmAction = nil
+		if action != nil {
+			return v, action()
+		}
+		return v, nil
+	case "n", "N", "esc":
+		v.confirmMode = false
+		v.confirmPrompt = ""
+		v.confirmAction = nil
+		return v, nil
+	}
+	return v, nil
+}
+
 func (v *KnowledgeListView) createDoc(name string) tea.Cmd {
 	dir := v.projectDir
 	return func() tea.Msg {
@@ -326,8 +465,109 @@ func (v *KnowledgeListView) createDoc(name string) tea.Cmd {
 	}
 }
 
+func (v *KnowledgeListView) doDeleteDoc(name string) tea.Cmd {
+	dir := v.projectDir
+	archived := v.showArchived
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		if archived {
+			path := filepath.Join(knowledge.Dir(dir), ".archive", name+".md")
+			if err := os.Remove(path); err != nil {
+				return ErrorMsg{Err: fmt.Errorf("deleting archived doc: %w", err)}
+			}
+		} else {
+			if err := service.KnowledgeDelete(ctx(), dir, name); err != nil {
+				return ErrorMsg{Err: err}
+			}
+		}
+
+		_ = git.CommitAll(context.Background(), dir, fmt.Sprintf("tui: delete knowledge doc %s", name))
+		return DataChangedMsg{StatusText: fmt.Sprintf("Deleted %s", name)}
+	}
+}
+
+func (v *KnowledgeListView) doArchiveDoc(name string) tea.Cmd {
+	dir := v.projectDir
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		src := knowledge.FilePath(dir, name)
+		archiveDir := filepath.Join(knowledge.Dir(dir), ".archive")
+		dst := filepath.Join(archiveDir, filepath.Base(src))
+
+		if _, err := os.Stat(src); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("doc %q not found", name)}
+		}
+		if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("creating archive dir: %w", err)}
+		}
+		if err := os.Rename(src, dst); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("archiving: %w", err)}
+		}
+
+		_ = git.CommitAll(context.Background(), dir, fmt.Sprintf("tui: archive knowledge doc %s", name))
+		return DataChangedMsg{StatusText: fmt.Sprintf("Archived %s", name)}
+	}
+}
+
+func (v *KnowledgeListView) doRenameDoc(oldName, newName string) tea.Cmd {
+	dir := v.projectDir
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		if err := service.KnowledgeRename(ctx(), dir, oldName, newName); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		_ = git.CommitAll(context.Background(), dir, fmt.Sprintf("tui: rename %s → %s", oldName, newName))
+		return DataChangedMsg{StatusText: fmt.Sprintf("Renamed to %s", newName)}
+	}
+}
+
+func (v *KnowledgeListView) doRestoreDoc(name string) tea.Cmd {
+	dir := v.projectDir
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		archiveDir := filepath.Join(knowledge.Dir(dir), ".archive")
+		src := filepath.Join(archiveDir, name+".md")
+		dst := knowledge.FilePath(dir, name)
+
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("creating dir: %w", err)}
+		}
+		if err := os.Rename(src, dst); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("restoring: %w", err)}
+		}
+
+		_ = git.CommitAll(context.Background(), dir, fmt.Sprintf("tui: restore knowledge doc %s", name))
+		return DataChangedMsg{StatusText: fmt.Sprintf("Restored %s", name)}
+	}
+}
+
 func (v *KnowledgeListView) View() string {
-	title := TitleStyle.Render(v.projectName) + HelpStyle.Render(" · Knowledge")
+	titleSuffix := " · Knowledge"
+	if v.showArchived {
+		titleSuffix = " · Knowledge (archived)"
+	}
+	title := TitleStyle.Render(v.projectName) + HelpStyle.Render(titleSuffix)
 
 	if !v.loaded {
 		return title + "\n\n" + HelpStyle.Render("  Loading...")
@@ -410,10 +650,14 @@ func (v *KnowledgeListView) View() string {
 	if v.inputMode {
 		cursorChar := CursorStyle.Render("█")
 		sb.WriteString("\n" + HelpStyle.Render("  "+v.inputPrompt) + v.inputValue + cursorChar)
+	} else if v.confirmMode {
+		sb.WriteString("\n" + ErrorStyle.Render("  "+v.confirmPrompt))
 	} else if v.searchMode {
 		sb.WriteString("\n" + HelpStyle.Render("  ↑↓ navigate  Enter view  Esc cancel search"))
+	} else if v.showArchived {
+		sb.WriteString("\n" + HelpStyle.Render("  ↑↓/jk nav  Enter view  R restore  d delete  A active  / search  ? help"))
 	} else {
-		sb.WriteString("\n" + HelpStyle.Render("  ↑↓/jk nav  ^D/^U page  Enter view  Tab todos  / search  n new  ? help"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑↓/jk nav  Enter view  d del  a archive  r rename  A archived  / search  n new  ? help"))
 	}
 
 	return sb.String()

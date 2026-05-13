@@ -1,0 +1,990 @@
+package tui
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/walter/p/internal/git"
+	"github.com/walter/p/internal/knowledge"
+	"github.com/walter/p/internal/project"
+)
+
+// =======================================================================
+// Test Helpers
+// =======================================================================
+
+// setupKnowledgeProject creates a temp project with knowledge docs.
+func setupKnowledgeProject(t *testing.T, docs map[string][]string) (string, string) {
+	t.Helper()
+	root := t.TempDir()
+
+	if err := project.Create(root, "test-proj", "Test project"); err != nil {
+		t.Fatalf("project.Create: %v", err)
+	}
+	projDir := filepath.Join(root, "test-proj")
+
+	if err := git.Init(context.Background(), projDir); err != nil {
+		t.Fatalf("git.Init: %v", err)
+	}
+
+	// Create knowledge docs
+	for name, tags := range docs {
+		if err := knowledge.Create(projDir, name, strings.ReplaceAll(name, "-", " "), tags); err != nil {
+			t.Fatalf("knowledge.Create(%q): %v", name, err)
+		}
+	}
+
+	_ = git.CommitAll(context.Background(), projDir, "setup test data")
+	return root, projDir
+}
+
+// loadKnowledgeListView creates and loads a KnowledgeListView with test data.
+func loadKnowledgeListView(t *testing.T, projDir string) *KnowledgeListView {
+	t.Helper()
+	v := NewKnowledgeListView("test-proj", projDir, 80, 24)
+	cmd := v.Init()
+	if cmd != nil {
+		msg := cmd()
+		v.Update(msg)
+	}
+	return v
+}
+
+// pressKey simulates a key press on a KnowledgeListView.
+func pressKey(v *KnowledgeListView, key string) (*KnowledgeListView, tea.Cmd) {
+	model, cmd := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+	return model.(*KnowledgeListView), cmd
+}
+
+// pressSpecialKey simulates a special key press.
+func pressSpecialKey(v *KnowledgeListView, keyType tea.KeyType) (*KnowledgeListView, tea.Cmd) {
+	model, cmd := v.Update(tea.KeyMsg{Type: keyType})
+	return model.(*KnowledgeListView), cmd
+}
+
+// kvPressKey simulates a key press on a KnowledgeView.
+func kvPressKey(v *KnowledgeView, key string) (*KnowledgeView, tea.Cmd) {
+	model, cmd := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+	return model.(*KnowledgeView), cmd
+}
+
+// kvPressSpecialKey simulates a special key press on KnowledgeView.
+func kvPressSpecialKey(v *KnowledgeView, keyType tea.KeyType) (*KnowledgeView, tea.Cmd) {
+	model, cmd := v.Update(tea.KeyMsg{Type: keyType})
+	return model.(*KnowledgeView), cmd
+}
+
+// =======================================================================
+// KnowledgeListView Delete Tests
+// =======================================================================
+
+func TestKnowledgeListView_Delete_ConfirmYes(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"architecture": {"design", "arch"},
+		"testing":      {"test"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+	if len(v.docs) != 2 {
+		t.Fatalf("expected 2 docs, got %d", len(v.docs))
+	}
+
+	// Press 'd' to start delete confirmation
+	v, _ = pressKey(v, "d")
+	if !v.confirmMode {
+		t.Fatal("should enter confirm mode on 'd'")
+	}
+	if !strings.Contains(v.confirmPrompt, "Delete") {
+		t.Errorf("confirmPrompt = %q, should mention Delete", v.confirmPrompt)
+	}
+
+	// Press 'y' to confirm
+	v, cmd := pressKey(v, "y")
+	if v.confirmMode {
+		t.Error("should exit confirm mode after 'y'")
+	}
+	if cmd == nil {
+		t.Fatal("should return a command for deletion")
+	}
+
+	// Execute the delete command
+	result := cmd()
+	if _, ok := result.(DataChangedMsg); !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected DataChangedMsg, got %T", result)
+	}
+
+	// Verify doc was deleted
+	docName := v.docs[0].Name // cursor was at 0
+	path := knowledge.FilePath(projDir, docName)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("doc file should be deleted")
+	}
+}
+
+func TestKnowledgeListView_Delete_ConfirmNo(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"architecture": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Press 'd' then 'n' to cancel
+	v, _ = pressKey(v, "d")
+	if !v.confirmMode {
+		t.Fatal("should be in confirm mode")
+	}
+
+	v, _ = pressKey(v, "n")
+	if v.confirmMode {
+		t.Error("should exit confirm mode after 'n'")
+	}
+
+	// Doc should still exist
+	path := knowledge.FilePath(projDir, "architecture")
+	if _, err := os.Stat(path); err != nil {
+		t.Error("doc should still exist after cancel")
+	}
+}
+
+func TestKnowledgeListView_Delete_ConfirmEsc(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"architecture": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	v, _ = pressKey(v, "d")
+	if !v.confirmMode {
+		t.Fatal("should be in confirm mode")
+	}
+
+	v, _ = pressSpecialKey(v, tea.KeyEsc)
+	if v.confirmMode {
+		t.Error("should exit confirm mode after Esc")
+	}
+}
+
+// =======================================================================
+// KnowledgeListView Archive Tests
+// =======================================================================
+
+func TestKnowledgeListView_Archive(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"architecture": {"design"},
+		"testing":      {"test"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Press 'a' to archive
+	v, cmd := pressKey(v, "a")
+	if cmd == nil {
+		t.Fatal("'a' should return a command for archiving")
+	}
+
+	result := cmd()
+	dcMsg, ok := result.(DataChangedMsg)
+	if !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected DataChangedMsg, got %T", result)
+	}
+	if !strings.Contains(dcMsg.StatusText, "Archived") {
+		t.Errorf("StatusText = %q, should mention Archived", dcMsg.StatusText)
+	}
+
+	// Verify doc moved to archive
+	docName := v.docs[0].Name
+	activePath := knowledge.FilePath(projDir, docName)
+	if _, err := os.Stat(activePath); !os.IsNotExist(err) {
+		t.Error("active doc should be gone")
+	}
+
+	archivePath := filepath.Join(knowledge.Dir(projDir), ".archive", docName+".md")
+	if _, err := os.Stat(archivePath); err != nil {
+		t.Errorf("archived doc should exist: %v", err)
+	}
+}
+
+func TestKnowledgeListView_Archive_NotInArchivedView(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"architecture": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Archive the doc first
+	cmd := v.doArchiveDoc("architecture")
+	cmd()
+
+	// Switch to archived view
+	v.showArchived = true
+	cmd = v.loadDocs()
+	msg := cmd()
+	v.Update(msg)
+
+	// Press 'a' in archived view — should not archive again
+	_, archiveCmd := pressKey(v, "a")
+	if archiveCmd != nil {
+		t.Error("'a' should do nothing in archived view")
+	}
+}
+
+// =======================================================================
+// KnowledgeListView Rename Tests
+// =======================================================================
+
+func TestKnowledgeListView_Rename(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"old-name": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Press 'r' to start rename
+	v, _ = pressKey(v, "r")
+	if !v.inputMode {
+		t.Fatal("should enter input mode on 'r'")
+	}
+	if v.inputPrompt != "Rename to: " {
+		t.Errorf("inputPrompt = %q", v.inputPrompt)
+	}
+	if v.inputValue != "old-name" {
+		t.Errorf("inputValue should be pre-filled with current name, got %q", v.inputValue)
+	}
+
+	// Clear current name and type new one
+	for range len(v.inputValue) {
+		v, _ = pressSpecialKey(v, tea.KeyBackspace)
+	}
+
+	for _, c := range "new-name" {
+		v, _ = pressKey(v, string(c))
+	}
+
+	if v.inputValue != "new-name" {
+		t.Errorf("inputValue = %q, want 'new-name'", v.inputValue)
+	}
+
+	// Submit
+	v, cmd := pressSpecialKey(v, tea.KeyEnter)
+	if v.inputMode {
+		t.Error("should exit input mode after Enter")
+	}
+	if cmd == nil {
+		t.Fatal("should return a command for rename")
+	}
+
+	result := cmd()
+	dcMsg, ok := result.(DataChangedMsg)
+	if !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected DataChangedMsg, got %T", result)
+	}
+	if !strings.Contains(dcMsg.StatusText, "new-name") {
+		t.Errorf("StatusText = %q", dcMsg.StatusText)
+	}
+
+	// Verify old file gone and new file exists
+	oldPath := knowledge.FilePath(projDir, "old-name")
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Error("old doc should be gone")
+	}
+
+	newPath := knowledge.FilePath(projDir, "new-name")
+	if _, err := os.Stat(newPath); err != nil {
+		t.Errorf("new doc should exist: %v", err)
+	}
+}
+
+func TestKnowledgeListView_Rename_EscCancels(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"keep-name": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	v, _ = pressKey(v, "r")
+	if !v.inputMode {
+		t.Fatal("should be in input mode")
+	}
+
+	v, _ = pressSpecialKey(v, tea.KeyEsc)
+	if v.inputMode {
+		t.Error("should exit input mode on Esc")
+	}
+
+	// Doc should still have original name
+	path := knowledge.FilePath(projDir, "keep-name")
+	if _, err := os.Stat(path); err != nil {
+		t.Error("doc should still exist with original name")
+	}
+}
+
+// =======================================================================
+// Archived View Toggle Tests
+// =======================================================================
+
+func TestKnowledgeListView_ToggleArchived(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"active-doc":  {"design"},
+		"archive-doc": {"old"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+	if len(v.docs) != 2 {
+		t.Fatalf("expected 2 active docs, got %d", len(v.docs))
+	}
+
+	// Archive one doc
+	archiveCmd := v.doArchiveDoc("archive-doc")
+	archiveCmd()
+
+	// Reload active docs
+	cmd := v.loadDocs()
+	msg := cmd()
+	v.Update(msg)
+	if len(v.docs) != 1 {
+		t.Fatalf("expected 1 active doc after archiving, got %d", len(v.docs))
+	}
+
+	// Press 'A' to toggle to archived view
+	v, cmd = pressKey(v, "A")
+	if !v.showArchived {
+		t.Fatal("should be in archived view after 'A'")
+	}
+	if cmd == nil {
+		t.Fatal("should return a reload command")
+	}
+
+	// Load archived docs
+	msg = cmd()
+	v.Update(msg)
+	if len(v.docs) != 1 {
+		t.Fatalf("expected 1 archived doc, got %d", len(v.docs))
+	}
+	if v.docs[0].Name != "archive-doc" {
+		t.Errorf("archived doc name = %q, want 'archive-doc'", v.docs[0].Name)
+	}
+
+	// View should show "(archived)" in title
+	view := v.View()
+	if !strings.Contains(view, "(archived)") {
+		t.Error("view should show '(archived)' in title")
+	}
+
+	// Press 'A' again to switch back to active
+	v, cmd = pressKey(v, "A")
+	if v.showArchived {
+		t.Error("should be back in active view after second 'A'")
+	}
+
+	msg = cmd()
+	v.Update(msg)
+	if len(v.docs) != 1 {
+		t.Fatalf("expected 1 active doc, got %d", len(v.docs))
+	}
+	if v.docs[0].Name != "active-doc" {
+		t.Errorf("active doc name = %q, want 'active-doc'", v.docs[0].Name)
+	}
+}
+
+func TestKnowledgeListView_Restore(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"restore-me": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Archive the doc
+	archiveCmd := v.doArchiveDoc("restore-me")
+	archiveCmd()
+
+	// Switch to archived view and load
+	v.showArchived = true
+	cmd := v.loadDocs()
+	msg := cmd()
+	v.Update(msg)
+
+	if len(v.docs) != 1 {
+		t.Fatalf("expected 1 archived doc, got %d", len(v.docs))
+	}
+
+	// Press 'R' to restore
+	v, cmd = pressKey(v, "R")
+	if cmd == nil {
+		t.Fatal("'R' should return a restore command")
+	}
+
+	result := cmd()
+	dcMsg, ok := result.(DataChangedMsg)
+	if !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected DataChangedMsg, got %T", result)
+	}
+	if !strings.Contains(dcMsg.StatusText, "Restored") {
+		t.Errorf("StatusText = %q", dcMsg.StatusText)
+	}
+
+	// Verify doc is back in active location
+	activePath := knowledge.FilePath(projDir, "restore-me")
+	if _, err := os.Stat(activePath); err != nil {
+		t.Error("restored doc should exist in active location")
+	}
+
+	// Verify doc is gone from archive
+	archivePath := filepath.Join(knowledge.Dir(projDir), ".archive", "restore-me.md")
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Error("doc should be gone from archive after restore")
+	}
+}
+
+func TestKnowledgeListView_Restore_NotInActiveView(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc1": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Press 'R' in active view — should do nothing
+	_, cmd := pressKey(v, "R")
+	if cmd != nil {
+		t.Error("'R' should do nothing in active view")
+	}
+}
+
+// =======================================================================
+// Tag Search Tests
+// =======================================================================
+
+func TestKnowledgeListView_TagSearch(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"api-design":     {"design", "api"},
+		"test-plan":      {"testing", "qa"},
+		"design-overview": {"design", "overview"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+	if len(v.docs) != 3 {
+		t.Fatalf("expected 3 docs, got %d", len(v.docs))
+	}
+
+	// Enter search mode
+	v, _ = pressKey(v, "/")
+	if !v.searchMode {
+		t.Fatal("should be in search mode")
+	}
+
+	// Type '#design' to filter by tag
+	for _, c := range "#design" {
+		v, _ = pressKey(v, string(c))
+	}
+
+	visible := v.visibleDocs()
+	if len(visible) != 2 {
+		t.Fatalf("expected 2 docs with 'design' tag, got %d", len(visible))
+	}
+
+	// Check that all visible docs have the 'design' tag
+	for _, doc := range visible {
+		hasTag := false
+		for _, tag := range doc.Tags {
+			if strings.Contains(strings.ToLower(tag), "design") {
+				hasTag = true
+				break
+			}
+		}
+		if !hasTag {
+			t.Errorf("doc %q should have 'design' tag", doc.Name)
+		}
+	}
+
+	// Clear search and verify all docs return
+	v, _ = pressSpecialKey(v, tea.KeyEsc)
+	if v.searchMode {
+		t.Error("should exit search mode")
+	}
+	visible = v.visibleDocs()
+	if len(visible) != 3 {
+		t.Errorf("all docs should be visible after clearing search, got %d", len(visible))
+	}
+}
+
+func TestKnowledgeListView_TagSearch_NoMatch(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc1": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	v, _ = pressKey(v, "/")
+	for _, c := range "#nonexistent" {
+		v, _ = pressKey(v, string(c))
+	}
+
+	visible := v.visibleDocs()
+	if len(visible) != 0 {
+		t.Errorf("expected 0 matches for nonexistent tag, got %d", len(visible))
+	}
+}
+
+func TestKnowledgeListView_TagSearch_HashOnly(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc1": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	v, _ = pressKey(v, "/")
+	v, _ = pressKey(v, "#")
+
+	// Just '#' with no tag name should return empty filtered list
+	visible := v.visibleDocs()
+	if len(visible) != 0 {
+		t.Errorf("expected 0 docs for bare '#', got %d", len(visible))
+	}
+}
+
+// =======================================================================
+// KnowledgeView Actions Tests
+// =======================================================================
+
+func TestKnowledgeView_Delete_ConfirmNavigatesBack(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"delete-me": {"design"},
+	})
+
+	v := NewKnowledgeView("test-proj", projDir, "delete-me", 80, 24)
+	cmd := v.Init()
+	msg := cmd()
+	v.Update(msg)
+
+	// Press 'd' to start delete
+	v, _ = kvPressKey(v, "d")
+	if !v.confirmMode {
+		t.Fatal("should enter confirm mode")
+	}
+	if !strings.Contains(v.confirmPrompt, "delete-me") {
+		t.Errorf("confirmPrompt should mention doc name, got %q", v.confirmPrompt)
+	}
+
+	// Confirm with 'y'
+	v, cmd = kvPressKey(v, "y")
+	if v.confirmMode {
+		t.Error("should exit confirm mode")
+	}
+	if cmd == nil {
+		t.Fatal("should return delete command")
+	}
+
+	result := cmd()
+	if _, ok := result.(GoBackMsg); !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected GoBackMsg after delete, got %T", result)
+	}
+
+	// Verify doc is deleted
+	path := knowledge.FilePath(projDir, "delete-me")
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("doc should be deleted")
+	}
+}
+
+func TestKnowledgeView_Archive_NavigatesBack(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"archive-me": {"design"},
+	})
+
+	v := NewKnowledgeView("test-proj", projDir, "archive-me", 80, 24)
+	cmd := v.Init()
+	msg := cmd()
+	v.Update(msg)
+
+	// Press 'a' to archive
+	v, cmd = kvPressKey(v, "a")
+	if cmd == nil {
+		t.Fatal("'a' should return archive command")
+	}
+
+	result := cmd()
+	if _, ok := result.(GoBackMsg); !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected GoBackMsg after archive, got %T", result)
+	}
+
+	// Verify doc moved to archive
+	activePath := knowledge.FilePath(projDir, "archive-me")
+	if _, err := os.Stat(activePath); !os.IsNotExist(err) {
+		t.Error("active doc should be gone")
+	}
+
+	archivePath := filepath.Join(knowledge.Dir(projDir), ".archive", "archive-me.md")
+	if _, err := os.Stat(archivePath); err != nil {
+		t.Errorf("archived doc should exist: %v", err)
+	}
+}
+
+func TestKnowledgeView_Rename_StaysInView(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"old-name": {"design"},
+	})
+
+	v := NewKnowledgeView("test-proj", projDir, "old-name", 80, 24)
+	cmd := v.Init()
+	msg := cmd()
+	v.Update(msg)
+
+	// Press 'r' to start rename
+	v, _ = kvPressKey(v, "r")
+	if !v.inputMode {
+		t.Fatal("should enter input mode on 'r'")
+	}
+	if v.inputValue != "old-name" {
+		t.Errorf("inputValue should be pre-filled, got %q", v.inputValue)
+	}
+
+	// Clear and type new name
+	for range len(v.inputValue) {
+		v, _ = kvPressSpecialKey(v, tea.KeyBackspace)
+	}
+	for _, c := range "new-name" {
+		v, _ = kvPressKey(v, string(c))
+	}
+
+	// Submit
+	v, cmd = kvPressSpecialKey(v, tea.KeyEnter)
+	if cmd == nil {
+		t.Fatal("should return rename command")
+	}
+
+	result := cmd()
+	renamedMsg, ok := result.(KnowledgeRenamedMsg)
+	if !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected KnowledgeRenamedMsg, got %T", result)
+	}
+	if renamedMsg.NewName != "new-name" {
+		t.Errorf("NewName = %q, want 'new-name'", renamedMsg.NewName)
+	}
+
+	// Apply the rename msg to the view
+	v.Update(renamedMsg)
+	if v.docName != "new-name" {
+		t.Errorf("docName should be updated to 'new-name', got %q", v.docName)
+	}
+
+	// Verify files
+	oldPath := knowledge.FilePath(projDir, "old-name")
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Error("old doc should be gone")
+	}
+	newPath := knowledge.FilePath(projDir, "new-name")
+	if _, err := os.Stat(newPath); err != nil {
+		t.Errorf("new doc should exist: %v", err)
+	}
+}
+
+func TestKnowledgeView_IsInputMode(t *testing.T) {
+	v := NewKnowledgeView("proj", "/tmp/proj", "doc", 80, 24)
+
+	if v.IsInputMode() {
+		t.Error("should not be in input mode initially")
+	}
+
+	v.confirmMode = true
+	if !v.IsInputMode() {
+		t.Error("should report input mode for confirm")
+	}
+
+	v.confirmMode = false
+	v.inputMode = true
+	if !v.IsInputMode() {
+		t.Error("should report input mode for input")
+	}
+}
+
+// =======================================================================
+// Edge Case Tests
+// =======================================================================
+
+func TestKnowledgeListView_EmptyDocList_NoActions(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{})
+
+	v := loadKnowledgeListView(t, projDir)
+	if len(v.docs) != 0 {
+		t.Fatalf("expected 0 docs, got %d", len(v.docs))
+	}
+
+	// Actions on empty list should not crash
+	v, _ = pressKey(v, "d")
+	if v.confirmMode {
+		t.Error("should not enter confirm mode on empty list")
+	}
+
+	v, cmd := pressKey(v, "a")
+	if cmd != nil {
+		t.Error("'a' should do nothing on empty list")
+	}
+
+	v, _ = pressKey(v, "r")
+	if v.inputMode {
+		t.Error("should not enter input mode on empty list")
+	}
+
+	// View should render without crash
+	view := v.View()
+	if view == "" {
+		t.Error("view should not be empty")
+	}
+}
+
+func TestKnowledgeListView_CursorAdjustAfterDeleteLast(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc-a": {"a"},
+		"doc-b": {"b"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Move cursor to last item
+	v.cursor = len(v.docs) - 1
+
+	// Delete the last doc
+	docName := v.docs[v.cursor].Name
+	deleteCmd := v.doDeleteDoc(docName)
+	result := deleteCmd()
+
+	// Apply DataChangedMsg
+	dcMsg := result.(DataChangedMsg)
+	v.Update(dcMsg)
+
+	// Reload
+	cmd := v.loadDocs()
+	msg := cmd()
+	v.Update(msg)
+
+	// Cursor should be adjusted
+	if v.cursor >= len(v.docs) && len(v.docs) > 0 {
+		t.Errorf("cursor (%d) should be within bounds (0..%d)", v.cursor, len(v.docs)-1)
+	}
+}
+
+func TestKnowledgeListView_ArchivedViewEmpty(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc1": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Toggle to archived view (no archived docs)
+	v, cmd := pressKey(v, "A")
+	if !v.showArchived {
+		t.Fatal("should be in archived view")
+	}
+
+	msg := cmd()
+	v.Update(msg)
+
+	if len(v.docs) != 0 {
+		t.Errorf("expected 0 archived docs, got %d", len(v.docs))
+	}
+
+	// View should render without crash
+	view := v.View()
+	if !strings.Contains(view, "No knowledge docs found") {
+		t.Errorf("should show empty state in archived view")
+	}
+}
+
+func TestKnowledgeListView_DeleteArchivedDoc(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"to-delete": {"old"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Archive the doc first
+	archiveCmd := v.doArchiveDoc("to-delete")
+	archiveCmd()
+
+	// Switch to archived view
+	v.showArchived = true
+	cmd := v.loadDocs()
+	msg := cmd()
+	v.Update(msg)
+
+	if len(v.docs) != 1 {
+		t.Fatalf("expected 1 archived doc, got %d", len(v.docs))
+	}
+
+	// Delete from archived view with confirmation
+	v, _ = pressKey(v, "d")
+	if !v.confirmMode {
+		t.Fatal("should enter confirm mode")
+	}
+
+	v, cmd = pressKey(v, "y")
+	result := cmd()
+	if _, ok := result.(DataChangedMsg); !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected DataChangedMsg, got %T", result)
+	}
+
+	// Verify archived doc is gone
+	archivePath := filepath.Join(knowledge.Dir(projDir), ".archive", "to-delete.md")
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Error("archived doc should be permanently deleted")
+	}
+}
+
+// =======================================================================
+// Help Bar Tests
+// =======================================================================
+
+func TestKnowledgeListView_HelpBar_ActiveView(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc1": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+	view := v.View()
+
+	// Active view should show action keys
+	for _, key := range []string{"del", "archive", "rename", "archived"} {
+		if !strings.Contains(view, key) {
+			t.Errorf("active help bar should contain %q", key)
+		}
+	}
+}
+
+func TestKnowledgeListView_HelpBar_ArchivedView(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc1": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	// Archive a doc and switch to archived view
+	archiveCmd := v.doArchiveDoc("doc1")
+	archiveCmd()
+
+	v.showArchived = true
+	cmd := v.loadDocs()
+	msg := cmd()
+	v.Update(msg)
+
+	view := v.View()
+	for _, key := range []string{"restore", "delete", "active"} {
+		if !strings.Contains(view, key) {
+			t.Errorf("archived help bar should contain %q", key)
+		}
+	}
+}
+
+func TestKnowledgeListView_HelpBar_ConfirmMode(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc1": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	v, _ = pressKey(v, "d")
+	view := v.View()
+	if !strings.Contains(view, "Delete") && !strings.Contains(view, "(y/n)") {
+		t.Error("confirm mode should show the confirmation prompt")
+	}
+}
+
+func TestKnowledgeView_HelpBar(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"doc1": {"design"},
+	})
+
+	v := NewKnowledgeView("test-proj", projDir, "doc1", 80, 24)
+	cmd := v.Init()
+	msg := cmd()
+	v.Update(msg)
+
+	view := v.View()
+	for _, key := range []string{"delete", "archive", "rename"} {
+		if !strings.Contains(view, key) {
+			t.Errorf("KnowledgeView help bar should contain %q", key)
+		}
+	}
+}
+
+// =======================================================================
+// Help Overlay Tests
+// =======================================================================
+
+func TestHelpOverlay_KnowledgeList(t *testing.T) {
+	help := renderContextHelp(ViewKnowledgeList)
+
+	expectedKeys := []string{"delete", "archive", "rename", "toggle archived", "#tag"}
+	for _, key := range expectedKeys {
+		if !strings.Contains(help, key) {
+			t.Errorf("knowledge list help should contain %q", key)
+		}
+	}
+}
+
+func TestHelpOverlay_KnowledgeView(t *testing.T) {
+	help := renderContextHelp(ViewKnowledgeView)
+
+	expectedKeys := []string{"delete", "archive", "rename"}
+	for _, key := range expectedKeys {
+		if !strings.Contains(help, key) {
+			t.Errorf("knowledge view help should contain %q", key)
+		}
+	}
+}
+
+// =======================================================================
+// Git Commit Tests
+// =======================================================================
+
+func TestKnowledgeListView_GitCommit_Delete(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"delete-me": {"design"},
+	})
+
+	v := loadKnowledgeListView(t, projDir)
+
+	deleteCmd := v.doDeleteDoc("delete-me")
+	result := deleteCmd()
+	if _, ok := result.(DataChangedMsg); !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("got error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected DataChangedMsg, got %T", result)
+	}
+
+	// Verify there's nothing to commit (git commit was done as part of delete)
+	diff, err := git.DiffStat(context.Background(), projDir)
+	if err != nil {
+		t.Logf("git diff-stat err (non-fatal): %v", err)
+	}
+	if diff != "" {
+		t.Errorf("should have no uncommitted changes after delete, got: %s", diff)
+	}
+}
