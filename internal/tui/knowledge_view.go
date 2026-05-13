@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/x/ansi"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/walter/p/internal/git"
@@ -54,6 +55,12 @@ type KnowledgeView struct {
 	inputPrompt string
 	inputValue  string
 	inputAction func(value string) tea.Cmd
+
+	// In-doc search
+	searchMode    bool
+	searchQuery   string
+	searchMatches []int // line indices with matches
+	searchCurrent int   // index into searchMatches
 }
 
 // NewKnowledgeView creates a new knowledge view for the given document.
@@ -69,7 +76,7 @@ func NewKnowledgeView(projectName, projectDir, docName string, width, height int
 
 // IsInputMode reports whether the view is in an interactive mode.
 func (v *KnowledgeView) IsInputMode() bool {
-	return v.confirmMode || v.inputMode
+	return v.confirmMode || v.inputMode || v.searchMode
 }
 
 func (v *KnowledgeView) Init() tea.Cmd {
@@ -139,6 +146,85 @@ func (v *KnowledgeView) handleInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (v *KnowledgeView) handleSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		v.searchMode = false
+		v.searchQuery = ""
+		return v, nil
+	case "enter":
+		v.searchMode = false
+		if v.searchQuery != "" {
+			v.findMatches()
+			if len(v.searchMatches) > 0 {
+				v.scrollToMatch(0)
+			}
+		}
+		return v, nil
+	case "backspace":
+		if len(v.searchQuery) > 0 {
+			v.searchQuery = v.searchQuery[:len(v.searchQuery)-1]
+			v.findMatches()
+			if len(v.searchMatches) > 0 {
+				v.scrollToMatch(0)
+			}
+		}
+		return v, nil
+	default:
+		if len(msg.String()) == 1 {
+			v.searchQuery += msg.String()
+			v.findMatches()
+			if len(v.searchMatches) > 0 {
+				v.scrollToMatch(0)
+			}
+		}
+		return v, nil
+	}
+}
+
+// findMatches searches rendered lines for the query (case-insensitive).
+// ANSI escape codes are stripped before matching so glamour styling doesn't
+// interfere with search.
+func (v *KnowledgeView) findMatches() {
+	v.searchMatches = nil
+	v.searchCurrent = 0
+	if v.searchQuery == "" {
+		return
+	}
+	query := strings.ToLower(v.searchQuery)
+	for i, line := range v.lines {
+		plain := strings.ToLower(ansi.Strip(line))
+		if strings.Contains(plain, query) {
+			v.searchMatches = append(v.searchMatches, i)
+		}
+	}
+}
+
+// scrollToMatch scrolls the viewport so that searchMatches[idx] is visible.
+func (v *KnowledgeView) scrollToMatch(idx int) {
+	if idx < 0 || idx >= len(v.searchMatches) {
+		return
+	}
+	v.searchCurrent = idx
+	line := v.searchMatches[idx]
+	vpHeight := v.viewportHeight()
+
+	// Center the match in the viewport if possible
+	target := max(0, line-vpHeight/2)
+	maxOff := v.maxScroll()
+	if target > maxOff {
+		target = maxOff
+	}
+	v.scrollOffset = target
+}
+
+// clearSearch removes the active search state.
+func (v *KnowledgeView) clearSearch() {
+	v.searchQuery = ""
+	v.searchMatches = nil
+	v.searchCurrent = 0
+}
+
 func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -178,6 +264,11 @@ func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v.handleConfirm(msg)
 		}
 
+		// Search mode
+		if v.searchMode {
+			return v.handleSearch(msg)
+		}
+
 		// Input mode (rename)
 		if v.inputMode {
 			return v.handleInput(msg)
@@ -185,7 +276,38 @@ func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch {
 		case key.Matches(msg, GlobalKeyMap.Back):
+			// If search is active, Esc clears it instead of going back
+			if v.searchQuery != "" {
+				v.clearSearch()
+				return v, nil
+			}
 			return v, func() tea.Msg { return GoBackMsg{} }
+
+		case key.Matches(msg, GlobalKeyMap.Search):
+			v.searchMode = true
+			v.searchQuery = ""
+			v.searchMatches = nil
+			v.searchCurrent = 0
+			return v, nil
+
+		case msg.String() == "n" && v.searchQuery != "":
+			// Next match
+			if len(v.searchMatches) > 0 {
+				next := (v.searchCurrent + 1) % len(v.searchMatches)
+				v.scrollToMatch(next)
+			}
+			return v, nil
+
+		case msg.String() == "N" && v.searchQuery != "":
+			// Previous match
+			if len(v.searchMatches) > 0 {
+				prev := v.searchCurrent - 1
+				if prev < 0 {
+					prev = len(v.searchMatches) - 1
+				}
+				v.scrollToMatch(prev)
+			}
+			return v, nil
 
 		case key.Matches(msg, NavKeyMap.Up), msg.String() == "k":
 			if v.scrollOffset > 0 {
@@ -458,13 +580,32 @@ func (v *KnowledgeView) View() string {
 
 	vpHeight := v.viewportHeight()
 
+	// Build a set of matching line indices for fast lookup during rendering
+	matchSet := make(map[int]bool, len(v.searchMatches))
+	for _, idx := range v.searchMatches {
+		matchSet[idx] = true
+	}
+	currentMatchLine := -1
+	if len(v.searchMatches) > 0 && v.searchCurrent < len(v.searchMatches) {
+		currentMatchLine = v.searchMatches[v.searchCurrent]
+	}
+
 	if len(v.lines) == 0 {
 		sb.WriteString(HelpStyle.Render("  (empty document)") + "\n")
 	} else {
 		startIdx := min(v.scrollOffset, len(v.lines))
 		endIdx := min(v.scrollOffset+vpHeight, len(v.lines))
 
-		for _, line := range v.lines[startIdx:endIdx] {
+		for i := startIdx; i < endIdx; i++ {
+			line := v.lines[i]
+			if matchSet[i] {
+				// Highlight matching lines with a marker
+				if i == currentMatchLine {
+					sb.WriteString(NowStyle.Render("▸ "))
+				} else {
+					sb.WriteString(CursorStyle.Render("│ "))
+				}
+			}
 			sb.WriteString(line)
 			sb.WriteByte('\n')
 		}
@@ -480,13 +621,23 @@ func (v *KnowledgeView) View() string {
 		fmt.Fprintf(&sb, "%s\n", HelpStyle.Render(fmt.Sprintf("  ── %d%% ──", scrollPct)))
 	}
 
-	if v.inputMode {
+	if v.searchMode {
+		cursorChar := CursorStyle.Render("█")
+		matchInfo := ""
+		if v.searchQuery != "" {
+			matchInfo = HelpStyle.Render(fmt.Sprintf(" (%d matches)", len(v.searchMatches)))
+		}
+		sb.WriteString("\n" + HelpStyle.Render("  /") + v.searchQuery + cursorChar + matchInfo)
+	} else if v.inputMode {
 		cursorChar := CursorStyle.Render("█")
 		sb.WriteString("\n" + HelpStyle.Render("  "+v.inputPrompt) + v.inputValue + cursorChar)
 	} else if v.confirmMode {
 		sb.WriteString("\n" + ErrorStyle.Render("  "+v.confirmPrompt))
+	} else if v.searchQuery != "" {
+		matchInfo := fmt.Sprintf("[%d/%d]", v.searchCurrent+1, len(v.searchMatches))
+		sb.WriteString("\n" + HelpStyle.Render(fmt.Sprintf("  /%s %s  n next  N prev  Esc clear  ↑↓ scroll", v.searchQuery, matchInfo)))
 	} else {
-		sb.WriteString("\n" + HelpStyle.Render("  ↑↓ scroll  PgUp/PgDn half-page  g/G top/bottom  d delete  a archive  r rename  Esc back"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑↓ scroll  / search  d delete  a archive  r rename  Esc back"))
 	}
 
 	return sb.String()

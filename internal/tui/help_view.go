@@ -187,6 +187,8 @@ func renderContextHelp(viewType ViewType) string {
 			{"PgUp/PgDn", "half page"},
 			{"g", "top"},
 			{"G", "bottom"},
+			{"/", "search in doc"},
+			{"n/N", "next/prev match"},
 			{"d", "delete doc"},
 			{"a", "archive doc"},
 			{"r", "rename doc"},

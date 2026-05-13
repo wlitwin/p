@@ -960,6 +960,342 @@ func TestHelpOverlay_KnowledgeView(t *testing.T) {
 }
 
 // =======================================================================
+// KnowledgeView In-Doc Search Tests
+// =======================================================================
+
+func TestKnowledgeView_Search_EnterAndFind(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"search-doc": {"design"},
+	})
+
+	// Write some searchable content
+	content := "---\ntitle: Search Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\ntags: [design]\n---\n\n# Search Doc\n\nThis has a keyword here.\n\nAnother paragraph without it.\n\nAnd the keyword appears again.\n"
+	os.WriteFile(knowledge.FilePath(projDir, "search-doc"), []byte(content), 0o644)
+
+	v := NewKnowledgeView("test-proj", projDir, "search-doc", 80, 40)
+	cmd := v.Init()
+	msg := cmd()
+	v.Update(msg)
+
+	if !v.loaded || len(v.lines) == 0 {
+		t.Fatal("content should be loaded")
+	}
+
+	// Press '/' to enter search mode
+	v, _ = kvPressKey(v, "/")
+	if !v.searchMode {
+		t.Fatal("should be in search mode after '/'")
+	}
+	if !v.IsInputMode() {
+		t.Error("IsInputMode should return true during search")
+	}
+
+	// Type search query
+	for _, c := range "keyword" {
+		v, _ = kvPressKey(v, string(c))
+	}
+
+	if v.searchQuery != "keyword" {
+		t.Errorf("searchQuery = %q, want 'keyword'", v.searchQuery)
+	}
+
+	// Should have matches (incremental search)
+	if len(v.searchMatches) != 2 {
+		t.Errorf("expected 2 matches for 'keyword', got %d", len(v.searchMatches))
+	}
+
+	// Submit search
+	v, _ = kvPressSpecialKey(v, tea.KeyEnter)
+	if v.searchMode {
+		t.Error("should exit search mode after Enter")
+	}
+	if v.searchQuery != "keyword" {
+		t.Error("searchQuery should persist after Enter")
+	}
+}
+
+func TestKnowledgeView_Search_NextPrev(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"nav-doc": {"design"},
+	})
+
+	// Create content with multiple matches spread across lines
+	var lines []string
+	lines = append(lines, "---", "title: Nav Doc", "created: 2026-01-01T00:00:00Z", "updated: 2026-01-01T00:00:00Z", "---", "", "# Nav Doc", "")
+	for i := 0; i < 50; i++ {
+		if i == 10 || i == 25 || i == 40 {
+			lines = append(lines, "This line has TARGET in it.")
+		} else {
+			lines = append(lines, "Some other content here.")
+		}
+	}
+	content := strings.Join(lines, "\n")
+	os.WriteFile(knowledge.FilePath(projDir, "nav-doc"), []byte(content), 0o644)
+
+	v := NewKnowledgeView("test-proj", projDir, "nav-doc", 80, 20)
+	cmd := v.Init()
+	msg := cmd()
+	v.Update(msg)
+
+	// Search for TARGET
+	v, _ = kvPressKey(v, "/")
+	for _, c := range "TARGET" {
+		v, _ = kvPressKey(v, string(c))
+	}
+	v, _ = kvPressSpecialKey(v, tea.KeyEnter)
+
+	if len(v.searchMatches) != 3 {
+		t.Fatalf("expected 3 matches, got %d", len(v.searchMatches))
+	}
+
+	// Should be on first match
+	if v.searchCurrent != 0 {
+		t.Errorf("searchCurrent = %d, want 0", v.searchCurrent)
+	}
+	firstOffset := v.scrollOffset
+
+	// Press 'n' for next match
+	v, _ = kvPressKey(v, "n")
+	if v.searchCurrent != 1 {
+		t.Errorf("after 'n': searchCurrent = %d, want 1", v.searchCurrent)
+	}
+	if v.scrollOffset == firstOffset {
+		// Should have scrolled to a different position
+		t.Log("scrolled to different position for match 2 — good")
+	}
+
+	// Press 'n' again
+	v, _ = kvPressKey(v, "n")
+	if v.searchCurrent != 2 {
+		t.Errorf("after second 'n': searchCurrent = %d, want 2", v.searchCurrent)
+	}
+
+	// Press 'n' again — should wrap to first
+	v, _ = kvPressKey(v, "n")
+	if v.searchCurrent != 0 {
+		t.Errorf("after wrap: searchCurrent = %d, want 0", v.searchCurrent)
+	}
+
+	// Press 'N' for previous — should go to last
+	v, _ = kvPressKey(v, "N")
+	if v.searchCurrent != 2 {
+		t.Errorf("after 'N': searchCurrent = %d, want 2", v.searchCurrent)
+	}
+
+	// Press 'N' again
+	v, _ = kvPressKey(v, "N")
+	if v.searchCurrent != 1 {
+		t.Errorf("after second 'N': searchCurrent = %d, want 1", v.searchCurrent)
+	}
+}
+
+func TestKnowledgeView_Search_EscClearsSearch(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"esc-doc": {"design"},
+	})
+
+	content := "---\ntitle: Esc Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n---\n\n# Esc Doc\n\nSome searchable text here.\n"
+	os.WriteFile(knowledge.FilePath(projDir, "esc-doc"), []byte(content), 0o644)
+
+	v := NewKnowledgeView("test-proj", projDir, "esc-doc", 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Search and submit
+	v, _ = kvPressKey(v, "/")
+	for _, c := range "searchable" {
+		v, _ = kvPressKey(v, string(c))
+	}
+	v, _ = kvPressSpecialKey(v, tea.KeyEnter)
+
+	if v.searchQuery == "" {
+		t.Fatal("searchQuery should be set after Enter")
+	}
+	if len(v.searchMatches) == 0 {
+		t.Fatal("should have matches")
+	}
+
+	// Esc should clear search (not go back)
+	v, cmd2 := kvPressSpecialKey(v, tea.KeyEsc)
+	if v.searchQuery != "" {
+		t.Error("Esc should clear searchQuery")
+	}
+	if len(v.searchMatches) != 0 {
+		t.Error("Esc should clear searchMatches")
+	}
+	if cmd2 != nil {
+		// Should NOT produce a GoBackMsg
+		result := cmd2()
+		if _, ok := result.(GoBackMsg); ok {
+			t.Error("Esc with active search should clear search, not go back")
+		}
+	}
+
+	// Second Esc should go back (no search active)
+	_, cmd2 = kvPressSpecialKey(v, tea.KeyEsc)
+	if cmd2 == nil {
+		t.Fatal("second Esc should go back")
+	}
+	result := cmd2()
+	if _, ok := result.(GoBackMsg); !ok {
+		t.Errorf("expected GoBackMsg, got %T", result)
+	}
+}
+
+func TestKnowledgeView_Search_EscDuringInput(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"esc-input": {"design"},
+	})
+
+	v := NewKnowledgeView("test-proj", projDir, "esc-input", 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Enter search mode
+	v, _ = kvPressKey(v, "/")
+	if !v.searchMode {
+		t.Fatal("should be in search mode")
+	}
+
+	// Type something
+	v, _ = kvPressKey(v, "t")
+	v, _ = kvPressKey(v, "e")
+
+	// Esc during input cancels search mode
+	v, _ = kvPressSpecialKey(v, tea.KeyEsc)
+	if v.searchMode {
+		t.Error("Esc should exit search mode")
+	}
+	if v.searchQuery != "" {
+		t.Error("query should be cleared on Esc during input")
+	}
+}
+
+func TestKnowledgeView_Search_CaseInsensitive(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"case-doc": {"design"},
+	})
+
+	content := "---\ntitle: Case Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n---\n\n# Case Doc\n\nHello World here.\n\nhello world there.\n\nHELLO WORLD everywhere.\n"
+	os.WriteFile(knowledge.FilePath(projDir, "case-doc"), []byte(content), 0o644)
+
+	v := NewKnowledgeView("test-proj", projDir, "case-doc", 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Search should be case-insensitive
+	v, _ = kvPressKey(v, "/")
+	for _, c := range "hello" {
+		v, _ = kvPressKey(v, string(c))
+	}
+
+	// Should match all 3 lines regardless of case
+	if len(v.searchMatches) != 3 {
+		t.Errorf("expected 3 case-insensitive matches, got %d", len(v.searchMatches))
+	}
+}
+
+func TestKnowledgeView_Search_NoMatches(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"no-match": {"design"},
+	})
+
+	v := NewKnowledgeView("test-proj", projDir, "no-match", 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	v, _ = kvPressKey(v, "/")
+	for _, c := range "zzzznonexistent" {
+		v, _ = kvPressKey(v, string(c))
+	}
+	v, _ = kvPressSpecialKey(v, tea.KeyEnter)
+
+	if len(v.searchMatches) != 0 {
+		t.Errorf("expected 0 matches, got %d", len(v.searchMatches))
+	}
+
+	// n/N should not crash with no matches
+	v, _ = kvPressKey(v, "n")
+	v, _ = kvPressKey(v, "N")
+}
+
+func TestKnowledgeView_Search_HelpBar(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"help-doc": {"design"},
+	})
+
+	content := "---\ntitle: Help Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n---\n\n# Help Doc\n\nSome text with a findme word.\n"
+	os.WriteFile(knowledge.FilePath(projDir, "help-doc"), []byte(content), 0o644)
+
+	v := NewKnowledgeView("test-proj", projDir, "help-doc", 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Default help bar should show '/ search'
+	view := v.View()
+	if !strings.Contains(view, "/ search") {
+		t.Error("default help bar should show '/ search'")
+	}
+
+	// During search input, should show the query
+	v, _ = kvPressKey(v, "/")
+	view = v.View()
+	if !strings.Contains(view, "/") {
+		t.Error("search mode should show '/' prompt")
+	}
+
+	// After search, should show n/N navigation
+	for _, c := range "findme" {
+		v, _ = kvPressKey(v, string(c))
+	}
+	v, _ = kvPressSpecialKey(v, tea.KeyEnter)
+
+	view = v.View()
+	if !strings.Contains(view, "findme") {
+		t.Error("help bar should show active search query")
+	}
+	if !strings.Contains(view, "next") || !strings.Contains(view, "prev") {
+		t.Error("help bar should show n/N navigation hints")
+	}
+}
+
+func TestKnowledgeView_Search_MatchIndicatorInView(t *testing.T) {
+	_, projDir := setupKnowledgeProject(t, map[string][]string{
+		"indicator-doc": {"design"},
+	})
+
+	content := "---\ntitle: Indicator Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n---\n\n# Indicator Doc\n\nFirst marker line.\n\nNo match here.\n\nSecond marker line.\n"
+	os.WriteFile(knowledge.FilePath(projDir, "indicator-doc"), []byte(content), 0o644)
+
+	v := NewKnowledgeView("test-proj", projDir, "indicator-doc", 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	v, _ = kvPressKey(v, "/")
+	for _, c := range "marker" {
+		v, _ = kvPressKey(v, string(c))
+	}
+	v, _ = kvPressSpecialKey(v, tea.KeyEnter)
+
+	view := v.View()
+	// The current match should have the ▸ indicator
+	if !strings.Contains(view, "▸") {
+		t.Error("view should show ▸ indicator for current match")
+	}
+}
+
+func TestHelpOverlay_KnowledgeView_Search(t *testing.T) {
+	help := renderContextHelp(ViewKnowledgeView)
+
+	if !strings.Contains(help, "search in doc") {
+		t.Error("help overlay should mention 'search in doc'")
+	}
+	if !strings.Contains(help, "next/prev match") {
+		t.Error("help overlay should mention 'next/prev match'")
+	}
+}
+
+// =======================================================================
 // Git Commit Tests
 // =======================================================================
 
