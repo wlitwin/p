@@ -86,12 +86,19 @@ func (a *App) contentHeight() int {
 	return h
 }
 
+// PrewarmRenderers initializes expensive renderers (glamour) before the
+// Bubbletea event loop starts. Must be called before tea.Program.Run() because
+// glamour's auto-style detection writes escape sequences to the terminal that
+// would interfere with Bubbletea's input handling if done concurrently.
+func (a *App) PrewarmRenderers() {
+	prewarmGlamourRenderer()
+}
+
 // Init implements tea.Model.
 func (a *App) Init() tea.Cmd {
 	if a.activeView == nil {
 		a.StartAtProjectList()
 	}
-	go prewarmGlamourRenderer()
 	return a.activeView.Init()
 }
 
@@ -292,7 +299,7 @@ func (a *App) navigate(msg NavigateMsg) tea.Cmd {
 		}
 		a.activeView = NewKnowledgeListView(a.projectName, a.projectDir, a.width, ch)
 	case ViewKnowledgeView:
-		a.activeView = NewKnowledgeView(a.projectName, a.projectDir, msg.DocName, a.width, ch)
+		a.activeView = NewKnowledgeView(a.projectName, a.projectDir, msg.DocName, a.width, ch, msg.Archived)
 	case ViewSearch:
 		a.activeView = NewSearchView(a.projectName, a.projectDir, a.width, ch)
 	case ViewStatus:

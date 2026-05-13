@@ -42,6 +42,7 @@ Press ? for full keybinding help.`,
 			app.StartAtList(args[0], dir, args[1])
 		}
 
+		app.PrewarmRenderers()
 		p := tea.NewProgram(app, tea.WithAltScreen())
 		_, err := p.Run()
 		return err

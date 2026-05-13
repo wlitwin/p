@@ -24,6 +24,7 @@ type NavigateMsg struct {
 	ListName    string
 	ItemID      string
 	DocName     string
+	Archived    bool
 }
 
 // GoBackMsg requests navigation back to the previous view.

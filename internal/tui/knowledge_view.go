@@ -36,6 +36,7 @@ type KnowledgeView struct {
 	projectName string
 	projectDir  string
 	docName     string
+	archived    bool
 
 	content string
 	lines   []string
@@ -64,13 +65,14 @@ type KnowledgeView struct {
 }
 
 // NewKnowledgeView creates a new knowledge view for the given document.
-func NewKnowledgeView(projectName, projectDir, docName string, width, height int) *KnowledgeView {
+func NewKnowledgeView(projectName, projectDir, docName string, width, height int, archived bool) *KnowledgeView {
 	return &KnowledgeView{
 		projectName: projectName,
 		projectDir:  projectDir,
 		docName:     docName,
 		width:       width,
 		height:      height,
+		archived:    archived,
 	}
 }
 
@@ -87,11 +89,19 @@ func (v *KnowledgeView) loadContent() tea.Cmd {
 	dir := v.projectDir
 	name := v.docName
 	width := v.width
+	archived := v.archived
 	return func() tea.Msg {
-		content, err := knowledge.Read(dir, name)
+		var path string
+		if archived {
+			path = filepath.Join(knowledge.Dir(dir), ".archive", name+".md")
+		} else {
+			path = knowledge.FilePath(dir, name)
+		}
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return ErrorMsg{Err: fmt.Errorf("reading %q: %w", name, err)}
 		}
+		content := string(data)
 		lines := renderMarkdownContent(content, width)
 		return KnowledgeContentLoadedMsg{Content: content, Lines: lines}
 	}

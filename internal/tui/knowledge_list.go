@@ -275,10 +275,12 @@ func (v *KnowledgeListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			visible := v.visibleDocs()
 			if len(visible) > 0 && v.cursor < len(visible) {
 				doc := visible[v.cursor]
+				archived := v.showArchived
 				return v, func() tea.Msg {
 					return NavigateMsg{
-						To:      ViewKnowledgeView,
-						DocName: doc.Name,
+						To:       ViewKnowledgeView,
+						DocName:  doc.Name,
+						Archived: archived,
 					}
 				}
 			}
@@ -396,13 +398,15 @@ func (v *KnowledgeListView) handleSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		visible := v.visibleDocs()
 		if len(visible) > 0 && v.cursor < len(visible) {
 			doc := visible[v.cursor]
+			archived := v.showArchived
 			v.searchMode = false
 			v.searchQuery = ""
 			v.filtered = nil
 			return v, func() tea.Msg {
 				return NavigateMsg{
-					To:      ViewKnowledgeView,
-					DocName: doc.Name,
+					To:       ViewKnowledgeView,
+					DocName:  doc.Name,
+					Archived: archived,
 				}
 			}
 		}

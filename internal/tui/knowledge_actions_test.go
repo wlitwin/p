@@ -567,7 +567,7 @@ func TestKnowledgeView_Delete_ConfirmNavigatesBack(t *testing.T) {
 		"delete-me": {"design"},
 	})
 
-	v := NewKnowledgeView("test-proj", projDir, "delete-me", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "delete-me", 80, 24, false)
 	cmd := v.Init()
 	msg := cmd()
 	v.Update(msg)
@@ -610,7 +610,7 @@ func TestKnowledgeView_Archive_NavigatesBack(t *testing.T) {
 		"archive-me": {"design"},
 	})
 
-	v := NewKnowledgeView("test-proj", projDir, "archive-me", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "archive-me", 80, 24, false)
 	cmd := v.Init()
 	msg := cmd()
 	v.Update(msg)
@@ -646,7 +646,7 @@ func TestKnowledgeView_Rename_StaysInView(t *testing.T) {
 		"old-name": {"design"},
 	})
 
-	v := NewKnowledgeView("test-proj", projDir, "old-name", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "old-name", 80, 24, false)
 	cmd := v.Init()
 	msg := cmd()
 	v.Update(msg)
@@ -704,7 +704,7 @@ func TestKnowledgeView_Rename_StaysInView(t *testing.T) {
 }
 
 func TestKnowledgeView_IsInputMode(t *testing.T) {
-	v := NewKnowledgeView("proj", "/tmp/proj", "doc", 80, 24)
+	v := NewKnowledgeView("proj", "/tmp/proj", "doc", 80, 24, false)
 
 	if v.IsInputMode() {
 		t.Error("should not be in input mode initially")
@@ -921,7 +921,7 @@ func TestKnowledgeView_HelpBar(t *testing.T) {
 		"doc1": {"design"},
 	})
 
-	v := NewKnowledgeView("test-proj", projDir, "doc1", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "doc1", 80, 24, false)
 	cmd := v.Init()
 	msg := cmd()
 	v.Update(msg)
@@ -973,7 +973,7 @@ func TestKnowledgeView_Search_EnterAndFind(t *testing.T) {
 	content := "---\ntitle: Search Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\ntags: [design]\n---\n\n# Search Doc\n\nThis has a keyword here.\n\nAnother paragraph without it.\n\nAnd the keyword appears again.\n"
 	os.WriteFile(knowledge.FilePath(projDir, "search-doc"), []byte(content), 0o644)
 
-	v := NewKnowledgeView("test-proj", projDir, "search-doc", 80, 40)
+	v := NewKnowledgeView("test-proj", projDir, "search-doc", 80, 40, false)
 	cmd := v.Init()
 	msg := cmd()
 	v.Update(msg)
@@ -1033,7 +1033,7 @@ func TestKnowledgeView_Search_NextPrev(t *testing.T) {
 	content := strings.Join(lines, "\n")
 	os.WriteFile(knowledge.FilePath(projDir, "nav-doc"), []byte(content), 0o644)
 
-	v := NewKnowledgeView("test-proj", projDir, "nav-doc", 80, 20)
+	v := NewKnowledgeView("test-proj", projDir, "nav-doc", 80, 20, false)
 	cmd := v.Init()
 	msg := cmd()
 	v.Update(msg)
@@ -1098,7 +1098,7 @@ func TestKnowledgeView_Search_EscClearsSearch(t *testing.T) {
 	content := "---\ntitle: Esc Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n---\n\n# Esc Doc\n\nSome searchable text here.\n"
 	os.WriteFile(knowledge.FilePath(projDir, "esc-doc"), []byte(content), 0o644)
 
-	v := NewKnowledgeView("test-proj", projDir, "esc-doc", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "esc-doc", 80, 24, false)
 	cmd := v.Init()
 	v.Update(cmd())
 
@@ -1148,7 +1148,7 @@ func TestKnowledgeView_Search_EscDuringInput(t *testing.T) {
 		"esc-input": {"design"},
 	})
 
-	v := NewKnowledgeView("test-proj", projDir, "esc-input", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "esc-input", 80, 24, false)
 	cmd := v.Init()
 	v.Update(cmd())
 
@@ -1180,7 +1180,7 @@ func TestKnowledgeView_Search_CaseInsensitive(t *testing.T) {
 	content := "---\ntitle: Case Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n---\n\n# Case Doc\n\nHello World here.\n\nhello world there.\n\nHELLO WORLD everywhere.\n"
 	os.WriteFile(knowledge.FilePath(projDir, "case-doc"), []byte(content), 0o644)
 
-	v := NewKnowledgeView("test-proj", projDir, "case-doc", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "case-doc", 80, 24, false)
 	cmd := v.Init()
 	v.Update(cmd())
 
@@ -1201,7 +1201,7 @@ func TestKnowledgeView_Search_NoMatches(t *testing.T) {
 		"no-match": {"design"},
 	})
 
-	v := NewKnowledgeView("test-proj", projDir, "no-match", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "no-match", 80, 24, false)
 	cmd := v.Init()
 	v.Update(cmd())
 
@@ -1228,7 +1228,7 @@ func TestKnowledgeView_Search_HelpBar(t *testing.T) {
 	content := "---\ntitle: Help Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n---\n\n# Help Doc\n\nSome text with a findme word.\n"
 	os.WriteFile(knowledge.FilePath(projDir, "help-doc"), []byte(content), 0o644)
 
-	v := NewKnowledgeView("test-proj", projDir, "help-doc", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "help-doc", 80, 24, false)
 	cmd := v.Init()
 	v.Update(cmd())
 
@@ -1268,7 +1268,7 @@ func TestKnowledgeView_Search_MatchIndicatorInView(t *testing.T) {
 	content := "---\ntitle: Indicator Doc\ncreated: 2026-01-01T00:00:00Z\nupdated: 2026-01-01T00:00:00Z\n---\n\n# Indicator Doc\n\nFirst marker line.\n\nNo match here.\n\nSecond marker line.\n"
 	os.WriteFile(knowledge.FilePath(projDir, "indicator-doc"), []byte(content), 0o644)
 
-	v := NewKnowledgeView("test-proj", projDir, "indicator-doc", 80, 24)
+	v := NewKnowledgeView("test-proj", projDir, "indicator-doc", 80, 24, false)
 	cmd := v.Init()
 	v.Update(cmd())
 
