@@ -1543,3 +1543,174 @@ func TestCreateListConflictDetection(t *testing.T) {
 		t.Error("expected error when creating list conflicting with existing directory")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// HTML tag sanitization tests
+// ---------------------------------------------------------------------------
+
+func TestHTMLTagsEscapedOnRender(t *testing.T) {
+	list := &List{
+		Title:   "HTML Test",
+		Created: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
+		Updated: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
+	}
+	AddItem(list, "Fix <div> rendering issue", Now, "")
+	AddItem(list, "Handle <script>alert(1)</script> injection", Now, "")
+	AddItem(list, "No HTML tags here", Now, "")
+
+	rendered := Render(list)
+
+	// HTML tags should be escaped in the rendered output
+	if strings.Contains(rendered, "- [ ] Fix <div>") {
+		t.Error("rendered output should escape <div> tag")
+	}
+	if !strings.Contains(rendered, `Fix \<div\>`) {
+		t.Errorf("rendered output should contain escaped tag, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "<script>") {
+		t.Error("rendered output should escape <script> tag")
+	}
+	// Plain text should be unchanged
+	if !strings.Contains(rendered, "No HTML tags here") {
+		t.Error("plain text should be preserved")
+	}
+}
+
+func TestHTMLTagsRoundTrip(t *testing.T) {
+	texts := []string{
+		"Fix <div> rendering issue",
+		"Handle <script>alert(1)</script> injection",
+		"Use <img src=x> carefully",
+		"Generic List<String> type",
+		"Compare x > 5 and y < 10",
+		"No HTML tags here",
+		"Send to <user@example.com>",
+	}
+
+	for _, text := range texts {
+		t.Run(text, func(t *testing.T) {
+			list := &List{
+				Title:   "Round Trip",
+				Created: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
+				Updated: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
+			}
+			AddItem(list, text, Now, "")
+
+			rendered := Render(list)
+			parsed, err := Parse(rendered)
+			if err != nil {
+				t.Fatalf("Parse(Render()) error: %v", err)
+			}
+
+			if len(parsed.Items) != 1 {
+				t.Fatalf("expected 1 item, got %d", len(parsed.Items))
+			}
+			if parsed.Items[0].Text != text {
+				t.Errorf("round-trip failed: got %q, want %q", parsed.Items[0].Text, text)
+			}
+		})
+	}
+}
+
+func TestHTMLTagsSaveLoadRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "todos"), 0o755)
+
+	list, err := CreateList(dir, "html-test", "HTML Test")
+	if err != nil {
+		t.Fatalf("CreateList error: %v", err)
+	}
+
+	AddItem(list, "Fix <div> rendering", Now, "")
+	AddItem(list, "Check <b>bold</b> tags", Now, "")
+
+	if err := SaveList(dir, "html-test", list); err != nil {
+		t.Fatalf("SaveList error: %v", err)
+	}
+
+	loaded, err := LoadList(dir, "html-test")
+	if err != nil {
+		t.Fatalf("LoadList error: %v", err)
+	}
+
+	if len(loaded.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(loaded.Items))
+	}
+	if loaded.Items[0].Text != "Fix <div> rendering" {
+		t.Errorf("item 0 text = %q, want %q", loaded.Items[0].Text, "Fix <div> rendering")
+	}
+	if loaded.Items[1].Text != "Check <b>bold</b> tags" {
+		t.Errorf("item 1 text = %q, want %q", loaded.Items[1].Text, "Check <b>bold</b> tags")
+	}
+}
+
+func TestHTMLTagsInChildItems(t *testing.T) {
+	list := &List{
+		Title:   "Nested HTML",
+		Created: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
+		Updated: time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC),
+	}
+	parent := AddItem(list, "Parent with <span> tag", Now, "")
+	parent.Children = append(parent.Children, &Item{
+		Text:     "Child with <em>emphasis</em>",
+		State:    Open,
+		Priority: Now,
+		Created:  "2026-05-12",
+	})
+
+	rendered := Render(list)
+	parsed, err := Parse(rendered)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	if parsed.Items[0].Text != "Parent with <span> tag" {
+		t.Errorf("parent text = %q, want %q", parsed.Items[0].Text, "Parent with <span> tag")
+	}
+	if len(parsed.Items[0].Children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(parsed.Items[0].Children))
+	}
+	if parsed.Items[0].Children[0].Text != "Child with <em>emphasis</em>" {
+		t.Errorf("child text = %q, want %q", parsed.Items[0].Children[0].Text, "Child with <em>emphasis</em>")
+	}
+}
+
+func TestParseExistingFileWithUnescapedHTML(t *testing.T) {
+	// Simulate an existing file that was saved before the sanitization was added.
+	// Unescaped HTML tags should be read as-is (the item.Text field stores the
+	// original text, and the next save will escape them).
+	input := `---
+title: Legacy
+created: 2026-05-12T12:00:00Z
+updated: 2026-05-12T12:00:00Z
+---
+
+# Legacy
+
+- [ ] Fix <div> issue priority=now created=2026-05-12
+- [ ] Handle <script>alert</script> priority=now created=2026-05-12
+`
+	list, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	if len(list.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(list.Items))
+	}
+	if list.Items[0].Text != "Fix <div> issue" {
+		t.Errorf("item 0 text = %q, want %q", list.Items[0].Text, "Fix <div> issue")
+	}
+	if list.Items[1].Text != "Handle <script>alert</script>" {
+		t.Errorf("item 1 text = %q, want %q", list.Items[1].Text, "Handle <script>alert</script>")
+	}
+
+	// Re-rendering should now escape the tags
+	rendered := Render(list)
+	if strings.Contains(rendered, "- [ ] Fix <div>") {
+		t.Error("re-rendered output should escape HTML tags")
+	}
+	if !strings.Contains(rendered, `\<div\>`) {
+		t.Errorf("re-rendered output should contain escaped <div>, got:\n%s", rendered)
+	}
+}

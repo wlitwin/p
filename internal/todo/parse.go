@@ -134,7 +134,7 @@ func parseItems(lines []string, baseIndent int) []*Item {
 		if len(metas) > 0 {
 			textEnd = metas[0][0]
 		}
-		item.Text = strings.TrimSpace(rest[:textEnd])
+		item.Text = sanitize.UnescapeHTMLTags(strings.TrimSpace(rest[:textEnd]))
 
 		for _, loc := range metaRe.FindAllStringSubmatch(rest, -1) {
 			switch loc[1] {
@@ -216,7 +216,7 @@ func Render(list *List) string {
 func renderItems(sb *strings.Builder, items []*Item, indent int) {
 	prefix := strings.Repeat("  ", indent)
 	for _, item := range items {
-		fmt.Fprintf(sb, "%s- %s %s", prefix, stateMarker(item.State), item.Text)
+		fmt.Fprintf(sb, "%s- %s %s", prefix, stateMarker(item.State), sanitize.EscapeHTMLTags(item.Text))
 
 		var meta []string
 		if item.Priority != "" && item.Priority != Now {
