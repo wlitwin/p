@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/walter/p/internal/knowledge"
@@ -322,6 +324,127 @@ func TestSetItemTags(t *testing.T) {
 	}
 	if len(tags) != 1 {
 		t.Errorf("expected 1 tag after removal, got %d", len(tags))
+	}
+}
+
+func TestKnowledgeReplace(t *testing.T) {
+	dir := setupTestProject(t)
+
+	knowledge.Append(dir, "overview", "## Details\n\nOld details content.", "")
+
+	if err := KnowledgeReplace(context.Background(), dir, "overview", "Details", "New details content."); err != nil {
+		t.Fatal(err)
+	}
+
+	content, _ := knowledge.Read(dir, "overview")
+	if !strings.Contains(content, "New details content.") {
+		t.Errorf("expected new content, got:\n%s", content)
+	}
+}
+
+func TestSetListContext(t *testing.T) {
+	dir := setupTestProject(t)
+
+	patterns := []string{"architecture/*", "decisions/db-*"}
+	if err := SetListContext(context.Background(), dir, "tasks", patterns); err != nil {
+		t.Fatal(err)
+	}
+
+	list, _ := todo.LoadList(dir, "tasks")
+	if len(list.Context) != 2 {
+		t.Fatalf("expected 2 context patterns, got %d", len(list.Context))
+	}
+	if list.Context[0] != "architecture/*" {
+		t.Errorf("context[0] = %q, want %q", list.Context[0], "architecture/*")
+	}
+	if list.Context[1] != "decisions/db-*" {
+		t.Errorf("context[1] = %q, want %q", list.Context[1], "decisions/db-*")
+	}
+}
+
+func TestSetListContextClear(t *testing.T) {
+	dir := setupTestProject(t)
+
+	SetListContext(context.Background(), dir, "tasks", []string{"old-pattern"})
+
+	if err := SetListContext(context.Background(), dir, "tasks", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	list, _ := todo.LoadList(dir, "tasks")
+	if list.Context != nil {
+		t.Errorf("expected nil context after clear, got %v", list.Context)
+	}
+}
+
+func TestSetDefaultContext(t *testing.T) {
+	dir := setupTestProject(t)
+
+	patterns := []string{"overview", "api-*"}
+	if err := SetDefaultContext(context.Background(), dir, patterns); err != nil {
+		t.Fatal(err)
+	}
+
+	meta, _ := project.LoadMeta(dir)
+	if len(meta.DefaultContext) != 2 {
+		t.Fatalf("expected 2 default context patterns, got %d", len(meta.DefaultContext))
+	}
+	if meta.DefaultContext[0] != "overview" {
+		t.Errorf("default context[0] = %q, want %q", meta.DefaultContext[0], "overview")
+	}
+}
+
+func TestSetDefaultContextClear(t *testing.T) {
+	dir := setupTestProject(t)
+
+	SetDefaultContext(context.Background(), dir, []string{"old"})
+
+	if err := SetDefaultContext(context.Background(), dir, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	meta, _ := project.LoadMeta(dir)
+	if meta.DefaultContext != nil {
+		t.Errorf("expected nil after clear, got %v", meta.DefaultContext)
+	}
+}
+
+func TestAssetAddListDelete(t *testing.T) {
+	dir := setupTestProject(t)
+
+	// Create a temp source file
+	tmpFile := filepath.Join(t.TempDir(), "test.txt")
+	os.WriteFile(tmpFile, []byte("test data"), 0o644)
+
+	// Add
+	filename, err := AssetAdd(context.Background(), dir, tmpFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filename != "test.txt" {
+		t.Errorf("expected filename 'test.txt', got %q", filename)
+	}
+
+	// List
+	infos, err := AssetList(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(infos) != 1 {
+		t.Fatalf("expected 1 asset, got %d", len(infos))
+	}
+	if infos[0].Name != "test.txt" {
+		t.Errorf("asset name = %q, want %q", infos[0].Name, "test.txt")
+	}
+
+	// Delete
+	if err := AssetDelete(context.Background(), dir, "test.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	infos, _ = AssetList(context.Background(), dir)
+	if len(infos) != 0 {
+		t.Errorf("expected 0 assets after delete, got %d", len(infos))
 	}
 }
 

@@ -1,6 +1,9 @@
 package display
 
 import (
+	"io"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -321,5 +324,100 @@ func TestDimTextPreservingLinks(t *testing.T) {
 	result = DimTextPreservingLinks("see [[foo]] and [[bar]]")
 	if result == "" {
 		t.Error("DimTextPreservingLinks should handle multiple links")
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("creating pipe: %v", err)
+	}
+	os.Stdout = w
+
+	fn()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	out, _ := io.ReadAll(r)
+	return string(out)
+}
+
+func TestPrintItems(t *testing.T) {
+	items := []*todo.Item{
+		{Text: "Open task", State: todo.Open, Priority: todo.Now},
+		{Text: "Done task", State: todo.Done, Priority: todo.Now, DoneDate: "2026-05-10"},
+		{Text: "Backlog task", State: todo.Open, Priority: todo.Backlog, Due: "2026-06-01"},
+	}
+
+	output := captureStdout(t, func() {
+		PrintItems(items, "", 1)
+	})
+
+	if !strings.Contains(output, "Open task") {
+		t.Errorf("output should contain 'Open task', got:\n%s", output)
+	}
+	if !strings.Contains(output, "Done task") {
+		t.Errorf("output should contain 'Done task', got:\n%s", output)
+	}
+	if !strings.Contains(output, "Backlog task") {
+		t.Errorf("output should contain 'Backlog task', got:\n%s", output)
+	}
+}
+
+func TestPrintItemsNested(t *testing.T) {
+	items := []*todo.Item{
+		{Text: "Parent", State: todo.Open, Priority: todo.Now, Children: []*todo.Item{
+			{Text: "Child", State: todo.Done, Priority: todo.Now},
+		}},
+	}
+
+	output := captureStdout(t, func() {
+		PrintItems(items, "", 1)
+	})
+
+	if !strings.Contains(output, "Parent") {
+		t.Error("output should contain 'Parent'")
+	}
+	if !strings.Contains(output, "Child") {
+		t.Error("output should contain 'Child'")
+	}
+}
+
+func TestPrintFilteredItems(t *testing.T) {
+	filtered := []FilteredItem{
+		{OriginalID: "2", Item: &todo.Item{Text: "Second task", State: todo.Open, Priority: todo.Now}},
+		{OriginalID: "4", Item: &todo.Item{Text: "Fourth task", State: todo.Open, Priority: todo.Backlog, Due: "2026-07-01"}},
+	}
+
+	output := captureStdout(t, func() {
+		PrintFilteredItems(filtered)
+	})
+
+	if !strings.Contains(output, "Second task") {
+		t.Error("output should contain 'Second task'")
+	}
+	if !strings.Contains(output, "Fourth task") {
+		t.Error("output should contain 'Fourth task'")
+	}
+}
+
+func TestPrintItemsEmpty(t *testing.T) {
+	output := captureStdout(t, func() {
+		PrintItems(nil, "", 1)
+	})
+	if output != "" {
+		t.Errorf("expected empty output for nil items, got: %q", output)
+	}
+}
+
+func TestPrintFilteredItemsEmpty(t *testing.T) {
+	output := captureStdout(t, func() {
+		PrintFilteredItems(nil)
+	})
+	if output != "" {
+		t.Errorf("expected empty output for nil items, got: %q", output)
 	}
 }

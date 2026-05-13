@@ -1675,6 +1675,152 @@ func TestHTMLTagsInChildItems(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// StateMarker tests
+// ---------------------------------------------------------------------------
+
+func TestStateMarker(t *testing.T) {
+	tests := []struct {
+		state State
+		want  string
+	}{
+		{Open, "[ ]"},
+		{Done, "[x]"},
+		{Blocked, "[-]"},
+		{State("unknown"), "[ ]"},
+	}
+
+	for _, tt := range tests {
+		got := StateMarker(tt.state)
+		if got != tt.want {
+			t.Errorf("StateMarker(%q) = %q, want %q", tt.state, got, tt.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CountStates tests
+// ---------------------------------------------------------------------------
+
+func TestCountStatesFlat(t *testing.T) {
+	items := []*Item{
+		{Text: "open 1", State: Open},
+		{Text: "done 1", State: Done},
+		{Text: "blocked 1", State: Blocked},
+		{Text: "open 2", State: Open},
+		{Text: "done 2", State: Done},
+	}
+
+	open, done, blocked := CountStates(items)
+	if open != 2 {
+		t.Errorf("open = %d, want 2", open)
+	}
+	if done != 2 {
+		t.Errorf("done = %d, want 2", done)
+	}
+	if blocked != 1 {
+		t.Errorf("blocked = %d, want 1", blocked)
+	}
+}
+
+func TestCountStatesNested(t *testing.T) {
+	items := []*Item{
+		{Text: "parent", State: Open, Children: []*Item{
+			{Text: "child 1", State: Done},
+			{Text: "child 2", State: Blocked, Children: []*Item{
+				{Text: "grandchild", State: Open},
+			}},
+		}},
+		{Text: "another", State: Done},
+	}
+
+	open, done, blocked := CountStates(items)
+	if open != 2 {
+		t.Errorf("open = %d, want 2", open)
+	}
+	if done != 2 {
+		t.Errorf("done = %d, want 2", done)
+	}
+	if blocked != 1 {
+		t.Errorf("blocked = %d, want 1", blocked)
+	}
+}
+
+func TestCountStatesEmpty(t *testing.T) {
+	open, done, blocked := CountStates(nil)
+	if open != 0 || done != 0 || blocked != 0 {
+		t.Errorf("expected all zeros for nil items, got open=%d done=%d blocked=%d", open, done, blocked)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SearchItems tests
+// ---------------------------------------------------------------------------
+
+func TestSearchItemsBasic(t *testing.T) {
+	items := []*Item{
+		{Text: "Fix the login bug", State: Open},
+		{Text: "Add user profile page", State: Open},
+		{Text: "Update login tests", State: Done},
+	}
+
+	results := SearchItems(items, "myproject", "tasks", "", 1, "login")
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if results[0].ItemID != "1" {
+		t.Errorf("results[0].ItemID = %q, want %q", results[0].ItemID, "1")
+	}
+	if results[1].ItemID != "3" {
+		t.Errorf("results[1].ItemID = %q, want %q", results[1].ItemID, "3")
+	}
+	if results[0].ProjectName != "myproject" {
+		t.Errorf("results[0].ProjectName = %q, want %q", results[0].ProjectName, "myproject")
+	}
+	if results[0].ListName != "tasks" {
+		t.Errorf("results[0].ListName = %q, want %q", results[0].ListName, "tasks")
+	}
+}
+
+func TestSearchItemsCaseInsensitive(t *testing.T) {
+	items := []*Item{
+		{Text: "Fix the LOGIN Bug", State: Open},
+	}
+
+	results := SearchItems(items, "proj", "list", "", 1, "login")
+	if len(results) != 1 {
+		t.Fatalf("case-insensitive search should find 1 result, got %d", len(results))
+	}
+}
+
+func TestSearchItemsNested(t *testing.T) {
+	items := []*Item{
+		{Text: "Parent task", State: Open, Children: []*Item{
+			{Text: "Child with login fix", State: Open},
+			{Text: "Unrelated child", State: Open},
+		}},
+	}
+
+	results := SearchItems(items, "proj", "list", "", 1, "login")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 nested result, got %d", len(results))
+	}
+	if results[0].ItemID != "1.1" {
+		t.Errorf("nested result ItemID = %q, want %q", results[0].ItemID, "1.1")
+	}
+}
+
+func TestSearchItemsNoMatch(t *testing.T) {
+	items := []*Item{
+		{Text: "Some task", State: Open},
+	}
+
+	results := SearchItems(items, "proj", "list", "", 1, "nonexistent")
+	if len(results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(results))
+	}
+}
+
 func TestParseExistingFileWithUnescapedHTML(t *testing.T) {
 	// Simulate an existing file that was saved before the sanitization was added.
 	// Unescaped HTML tags should be read as-is (the item.Text field stores the

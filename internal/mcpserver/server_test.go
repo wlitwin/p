@@ -877,3 +877,77 @@ func TestAssetRemoveMissingParams(t *testing.T) {
 		t.Errorf("expected error for empty params, got: %s", text)
 	}
 }
+
+// --- Tool definition tests ---
+
+func TestToolDefinitions(t *testing.T) {
+	tests := []struct {
+		name string
+		tool mcp.Tool
+	}{
+		{"project_list", projectListTool()},
+		{"todo_list", todoListTool()},
+		{"knowledge_read", knowledgeReadTool()},
+		{"todo_add", todoAddTool()},
+		{"todo_update", todoUpdateTool()},
+		{"todo_state", todoStateTool()},
+		{"todo_remove", todoRemoveTool()},
+		{"knowledge_create", knowledgeCreateTool()},
+		{"knowledge_append", knowledgeAppendTool()},
+		{"knowledge_replace", knowledgeReplaceTool()},
+		{"knowledge_rename", knowledgeRenameTool()},
+		{"knowledge_delete", knowledgeDeleteTool()},
+		{"todo_move", todoMoveTool()},
+		{"todo_context", todoContextTool()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.tool.Name != tt.name {
+				t.Errorf("tool name = %q, want %q", tt.tool.Name, tt.name)
+			}
+			if tt.tool.Description == "" {
+				t.Error("tool description should not be empty")
+			}
+		})
+	}
+}
+
+func TestExtraToolDefinitions(t *testing.T) {
+	tests := []struct {
+		name string
+		tool mcp.Tool
+	}{
+		{"project_create", projectCreateTool()},
+		{"project_archive", projectArchiveTool()},
+		{"status", statusTool()},
+		{"search", searchTool()},
+		{"todo_priority", todoPriorityTool()},
+		{"todo_due", todoDueTool()},
+		{"todo_rm_list", todoRmListTool()},
+		{"knowledge_list", knowledgeListTool()},
+		{"knowledge_search", knowledgeSearchTool()},
+		{"asset_add", assetAddTool()},
+		{"asset_list", assetListTool()},
+		{"asset_remove", assetRemoveTool()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.tool.Name != tt.name {
+				t.Errorf("tool name = %q, want %q", tt.tool.Name, tt.name)
+			}
+			if tt.tool.Description == "" {
+				t.Error("tool description should not be empty")
+			}
+		})
+	}
+}
+
+func TestNewServer(t *testing.T) {
+	root := setupTestRoot(t)
+	server := NewServer(root)
+	if server == nil {
+		t.Fatal("NewServer returned nil")
+	}
+}

@@ -737,3 +737,77 @@ func TestProjectContextEmptyPatternsNoKnowledge(t *testing.T) {
 		t.Error("empty context patterns should include no knowledge docs")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// MCPConfigJSON tests
+// ---------------------------------------------------------------------------
+
+func TestMCPConfigJSON(t *testing.T) {
+	json, err := MCPConfigJSON("/usr/local/bin/p")
+	if err != nil {
+		t.Fatalf("MCPConfigJSON error: %v", err)
+	}
+
+	if !strings.Contains(json, "/usr/local/bin/p") {
+		t.Errorf("JSON should contain binary path, got: %s", json)
+	}
+	if !strings.Contains(json, `"mcp"`) {
+		t.Errorf("JSON should contain 'mcp' arg, got: %s", json)
+	}
+	if !strings.Contains(json, `"p"`) {
+		t.Errorf("JSON should contain server name 'p', got: %s", json)
+	}
+}
+
+func TestMCPConfigJSONDifferentPaths(t *testing.T) {
+	paths := []string{
+		"/usr/bin/p",
+		"/home/user/.local/bin/p",
+		"./p",
+	}
+	for _, path := range paths {
+		json, err := MCPConfigJSON(path)
+		if err != nil {
+			t.Fatalf("MCPConfigJSON(%q) error: %v", path, err)
+		}
+		if !strings.Contains(json, path) {
+			t.Errorf("MCPConfigJSON(%q) should contain the path, got: %s", path, json)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RenderMarkdown tests
+// ---------------------------------------------------------------------------
+
+func TestRenderMarkdown(t *testing.T) {
+	mdRenderer = nil
+	output, err := RenderMarkdown("hello **world**")
+	if err != nil {
+		t.Fatalf("RenderMarkdown error: %v", err)
+	}
+	if !strings.Contains(output, "hello") {
+		t.Errorf("RenderMarkdown output should contain 'hello', got: %q", output)
+	}
+	if !strings.Contains(output, "world") {
+		t.Errorf("RenderMarkdown output should contain 'world', got: %q", output)
+	}
+}
+
+func TestRenderMarkdownReusesRenderer(t *testing.T) {
+	mdRenderer = nil
+	_, err := RenderMarkdown("first call")
+	if err != nil {
+		t.Fatalf("first RenderMarkdown error: %v", err)
+	}
+	renderer1 := mdRenderer
+
+	_, err = RenderMarkdown("second call")
+	if err != nil {
+		t.Fatalf("second RenderMarkdown error: %v", err)
+	}
+
+	if mdRenderer != renderer1 {
+		t.Error("RenderMarkdown should reuse the same renderer")
+	}
+}
