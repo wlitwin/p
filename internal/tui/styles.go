@@ -33,4 +33,14 @@ var (
 	CountOpenStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 	CountDoneStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
 	CountBlockedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
+
+	// Search match highlighting
+	SearchMatchStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("214")).
+				Foreground(lipgloss.Color("0")).
+				Bold(true)
+	SearchCurrentLineStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("236"))
+	SearchOtherLineStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("234"))
 )

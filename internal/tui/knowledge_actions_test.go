@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/knowledge"
 	"github.com/walter/p/internal/project"
@@ -1281,6 +1282,60 @@ func TestKnowledgeView_Search_MatchIndicatorInView(t *testing.T) {
 	// The current match should have the ▸ indicator
 	if !strings.Contains(view, "▸") {
 		t.Error("view should show ▸ indicator for current match")
+	}
+}
+
+func TestHighlightSearchTerm_PlainText(t *testing.T) {
+	result := highlightSearchTerm("Hello World Hello", "hello")
+	stripped := ansi.Strip(result)
+
+	// The visible text content should be preserved regardless of terminal
+	if stripped != "Hello World Hello" {
+		t.Errorf("stripped text = %q, want 'Hello World Hello'", stripped)
+	}
+}
+
+func TestHighlightSearchTerm_NoMatch(t *testing.T) {
+	original := "Hello World"
+	result := highlightSearchTerm(original, "xyz")
+	if result != original {
+		t.Error("no-match should return the original line unchanged")
+	}
+}
+
+func TestHighlightSearchTerm_EmptyQuery(t *testing.T) {
+	original := "Hello World"
+	result := highlightSearchTerm(original, "")
+	if result != original {
+		t.Error("empty query should return original line")
+	}
+}
+
+func TestHighlightSearchTerm_MultipleMatches(t *testing.T) {
+	result := highlightSearchTerm("cat and cat and cat", "cat")
+	stripped := ansi.Strip(result)
+	// Visible text should be preserved
+	if stripped != "cat and cat and cat" {
+		t.Errorf("stripped = %q, want 'cat and cat and cat'", stripped)
+	}
+}
+
+func TestHighlightSearchTerm_CaseInsensitive(t *testing.T) {
+	result := highlightSearchTerm("Hello HELLO hello", "hello")
+	stripped := ansi.Strip(result)
+	// All three variants should be in the output with original casing
+	if stripped != "Hello HELLO hello" {
+		t.Errorf("stripped = %q, want 'Hello HELLO hello'", stripped)
+	}
+}
+
+func TestHighlightSearchTerm_WithANSI(t *testing.T) {
+	// Simulate a glamour-styled line (with ANSI codes around "bold")
+	styled := "Some \x1b[1mbold\x1b[0m text here"
+	result := highlightSearchTerm(styled, "bold")
+	stripped := ansi.Strip(result)
+	if !strings.Contains(stripped, "bold") {
+		t.Errorf("stripped result should contain 'bold', got %q", stripped)
 	}
 }
 

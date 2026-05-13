@@ -225,6 +225,58 @@ func (v *KnowledgeView) clearSearch() {
 	v.searchCurrent = 0
 }
 
+// highlightSearchTerm inserts SearchMatchStyle around all occurrences of query
+// in an ANSI-styled line. Uses ansi.Cut to split by grapheme position so
+// existing escape codes are preserved.
+func highlightSearchTerm(line, query string) string {
+	if query == "" {
+		return line
+	}
+
+	plain := ansi.Strip(line)
+	lowerPlain := strings.ToLower(plain)
+	lowerQuery := strings.ToLower(query)
+	queryLen := len([]rune(lowerQuery))
+
+	// Find all match positions in the plain (stripped) text
+	type span struct{ start, end int }
+	var matches []span
+	runes := []rune(lowerPlain)
+	qrunes := []rune(lowerQuery)
+	for i := 0; i <= len(runes)-queryLen; i++ {
+		if string(runes[i:i+queryLen]) == string(qrunes) {
+			matches = append(matches, span{i, i + queryLen})
+			i += queryLen - 1 // skip past this match
+		}
+	}
+
+	if len(matches) == 0 {
+		return line
+	}
+
+	// Reconstruct line with highlights by cutting around match boundaries.
+	// ansi.Cut(s, left, right) extracts graphemes [left, right) preserving ANSI.
+	totalLen := ansi.StringWidth(line)
+	var sb strings.Builder
+	pos := 0
+	for _, m := range matches {
+		// Text before match
+		if m.start > pos {
+			sb.WriteString(ansi.Cut(line, pos, m.start))
+		}
+		// The matched segment — strip its ANSI so our highlight style is clean
+		matchText := ansi.Strip(ansi.Cut(line, m.start, m.end))
+		sb.WriteString(SearchMatchStyle.Render(matchText))
+		pos = m.end
+	}
+	// Remainder after last match
+	if pos < totalLen {
+		sb.WriteString(ansi.Cut(line, pos, totalLen))
+	}
+
+	return sb.String()
+}
+
 func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -599,11 +651,13 @@ func (v *KnowledgeView) View() string {
 		for i := startIdx; i < endIdx; i++ {
 			line := v.lines[i]
 			if matchSet[i] {
-				// Highlight matching lines with a marker
+				// Highlight the matched search terms within the line
+				line = highlightSearchTerm(line, v.searchQuery)
+
 				if i == currentMatchLine {
-					sb.WriteString(NowStyle.Render("▸ "))
+					sb.WriteString(NowStyle.Render("▸▸"))
 				} else {
-					sb.WriteString(CursorStyle.Render("│ "))
+					sb.WriteString(StatusStyle.Render(" ▸"))
 				}
 			}
 			sb.WriteString(line)
