@@ -961,6 +961,277 @@ func TestIntegration_TodoListView_ArchiveList(t *testing.T) {
 }
 
 // =======================================================================
+// TodoListView Archived View Integration Tests
+// =======================================================================
+
+func TestIntegration_TodoListView_ToggleArchived(t *testing.T) {
+	_, projDir := setupTestProject(t, "test-proj", map[string][]*todo.Item{
+		"active-list": {
+			{Text: "Active task", State: todo.Open},
+		},
+		"old-list": {
+			{Text: "Old task", State: todo.Done},
+		},
+	})
+
+	v := NewTodoListView("test-proj", projDir, 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	if len(v.lists) != 2 {
+		t.Fatalf("expected 2 active lists, got %d", len(v.lists))
+	}
+
+	// Archive one list
+	archiveCmd := v.doArchiveList("old-list")
+	result := archiveCmd()
+	if _, ok := result.(DataChangedMsg); !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("archive error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected DataChangedMsg, got %T", result)
+	}
+
+	// Reload active lists
+	cmd = v.loadLists()
+	v.Update(cmd())
+	if len(v.lists) != 1 {
+		t.Fatalf("expected 1 active list after archive, got %d", len(v.lists))
+	}
+
+	// Press 'A' to toggle to archived view
+	_, cmd = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")})
+	if !v.showArchived {
+		t.Fatal("should be in archived view after 'A'")
+	}
+	if cmd == nil {
+		t.Fatal("should return reload command")
+	}
+
+	// Load archived lists
+	v.Update(cmd())
+	if len(v.lists) != 1 {
+		t.Fatalf("expected 1 archived list, got %d", len(v.lists))
+	}
+	if v.lists[0].Name != "old-list" {
+		t.Errorf("archived list name = %q, want 'old-list'", v.lists[0].Name)
+	}
+
+	// Verify title shows "(archived)"
+	view := v.View()
+	if !strings.Contains(view, "(archived)") {
+		t.Error("view should show '(archived)' in title")
+	}
+
+	// Press 'A' again to switch back
+	_, cmd = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")})
+	if v.showArchived {
+		t.Error("should be back in active view")
+	}
+
+	v.Update(cmd())
+	if len(v.lists) != 1 {
+		t.Fatalf("expected 1 active list, got %d", len(v.lists))
+	}
+	if v.lists[0].Name != "active-list" {
+		t.Errorf("active list name = %q, want 'active-list'", v.lists[0].Name)
+	}
+}
+
+func TestIntegration_TodoListView_RestoreList(t *testing.T) {
+	_, projDir := setupTestProject(t, "test-proj", map[string][]*todo.Item{
+		"restore-me": {
+			{Text: "Restore task", State: todo.Open, Priority: todo.Now},
+		},
+	})
+
+	v := NewTodoListView("test-proj", projDir, 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Archive the list
+	archiveCmd := v.doArchiveList("restore-me")
+	archiveCmd()
+
+	// Switch to archived view and load
+	v.showArchived = true
+	cmd = v.loadLists()
+	v.Update(cmd())
+
+	if len(v.lists) != 1 {
+		t.Fatalf("expected 1 archived list, got %d", len(v.lists))
+	}
+
+	// Press 'R' to restore
+	_, cmd = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	if cmd == nil {
+		t.Fatal("'R' should return restore command")
+	}
+
+	result := cmd()
+	dcMsg, ok := result.(DataChangedMsg)
+	if !ok {
+		if errMsg, isErr := result.(ErrorMsg); isErr {
+			t.Fatalf("restore error: %v", errMsg.Err)
+		}
+		t.Fatalf("expected DataChangedMsg, got %T", result)
+	}
+	if !strings.Contains(dcMsg.StatusText, "Restored") {
+		t.Errorf("StatusText = %q, should mention Restored", dcMsg.StatusText)
+	}
+
+	// Verify list is back in active location
+	activePath := todo.ListPath(projDir, "restore-me")
+	if _, err := os.Stat(activePath); err != nil {
+		t.Error("restored list should exist in active location")
+	}
+
+	// Verify gone from archive
+	archivePath := filepath.Join(todo.ListDir(projDir), ".archive", "restore-me.md")
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Error("list should be gone from archive after restore")
+	}
+
+	// Verify data integrity — load and check items
+	list, err := todo.LoadList(projDir, "restore-me")
+	if err != nil {
+		t.Fatalf("LoadList: %v", err)
+	}
+	if len(list.Items) != 1 || list.Items[0].Text != "Restore task" {
+		t.Errorf("restored list data should be intact, got %d items", len(list.Items))
+	}
+}
+
+func TestIntegration_TodoListView_RestoreNotInActiveView(t *testing.T) {
+	_, projDir := setupTestProject(t, "test-proj", map[string][]*todo.Item{
+		"list1": {{Text: "Task", State: todo.Open}},
+	})
+
+	v := NewTodoListView("test-proj", projDir, 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// 'R' in active view should do nothing
+	_, cmd = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	if cmd != nil {
+		t.Error("'R' should do nothing in active view")
+	}
+}
+
+func TestIntegration_TodoListView_ArchiveNotInArchivedView(t *testing.T) {
+	_, projDir := setupTestProject(t, "test-proj", map[string][]*todo.Item{
+		"list1": {{Text: "Task", State: todo.Open}},
+	})
+
+	v := NewTodoListView("test-proj", projDir, 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Archive the list and switch to archived view
+	archiveCmd := v.doArchiveList("list1")
+	archiveCmd()
+
+	v.showArchived = true
+	cmd = v.loadLists()
+	v.Update(cmd())
+
+	// 'a' in archived view should not trigger archive
+	_, cmd = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	if v.confirmMode {
+		t.Error("'a' should not enter confirm mode in archived view")
+	}
+}
+
+func TestIntegration_TodoListView_ArchivedViewEmpty(t *testing.T) {
+	_, projDir := setupTestProject(t, "test-proj", map[string][]*todo.Item{
+		"list1": {{Text: "Task", State: todo.Open}},
+	})
+
+	v := NewTodoListView("test-proj", projDir, 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Toggle to archived view with no archived lists
+	v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")})
+	cmd = v.loadLists()
+	v.Update(cmd())
+
+	if len(v.lists) != 0 {
+		t.Errorf("expected 0 archived lists, got %d", len(v.lists))
+	}
+
+	view := v.View()
+	if !strings.Contains(view, "No todo lists found") {
+		t.Error("should show empty state message")
+	}
+}
+
+func TestIntegration_TodoListView_ArchivedListCounts(t *testing.T) {
+	_, projDir := setupTestProject(t, "test-proj", map[string][]*todo.Item{
+		"mixed": {
+			{Text: "Open", State: todo.Open, Priority: todo.Now},
+			{Text: "Done", State: todo.Done, Priority: todo.Backlog},
+			{Text: "Blocked", State: todo.Blocked, Priority: todo.Now},
+		},
+	})
+
+	v := NewTodoListView("test-proj", projDir, 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Archive the list
+	archiveCmd := v.doArchiveList("mixed")
+	archiveCmd()
+
+	// Switch to archived view
+	v.showArchived = true
+	cmd = v.loadLists()
+	v.Update(cmd())
+
+	if len(v.lists) != 1 {
+		t.Fatalf("expected 1 archived list, got %d", len(v.lists))
+	}
+
+	// Verify counts are shown correctly
+	l := v.lists[0]
+	if l.Open != 1 || l.Done != 1 || l.Blocked != 1 {
+		t.Errorf("counts: open=%d done=%d blocked=%d, want 1/1/1", l.Open, l.Done, l.Blocked)
+	}
+}
+
+func TestIntegration_TodoListView_HelpBar_ArchivedView(t *testing.T) {
+	_, projDir := setupTestProject(t, "test-proj", map[string][]*todo.Item{
+		"list1": {{Text: "Task", State: todo.Open}},
+	})
+
+	v := NewTodoListView("test-proj", projDir, 80, 24)
+	cmd := v.Init()
+	v.Update(cmd())
+
+	// Active view help bar
+	view := v.View()
+	if !strings.Contains(view, "archived") {
+		t.Error("active help bar should mention 'archived' toggle")
+	}
+
+	// Archive and switch
+	archiveCmd := v.doArchiveList("list1")
+	archiveCmd()
+	v.showArchived = true
+	cmd = v.loadLists()
+	v.Update(cmd())
+
+	// Archived view help bar
+	view = v.View()
+	if !strings.Contains(view, "restore") {
+		t.Error("archived help bar should mention 'restore'")
+	}
+	if !strings.Contains(view, "active") {
+		t.Error("archived help bar should mention 'active' toggle")
+	}
+}
+
+// =======================================================================
 // StatusView Integration Test
 // =======================================================================
 

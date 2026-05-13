@@ -36,6 +36,9 @@ type TodoListView struct {
 	confirmMode   bool
 	confirmPrompt string
 	confirmAction func() tea.Cmd
+
+	// Archive view toggle
+	showArchived bool
 }
 
 // NewTodoListView creates a new todo list view for the given project.
@@ -54,7 +57,12 @@ func (v *TodoListView) Init() tea.Cmd {
 
 func (v *TodoListView) loadLists() tea.Cmd {
 	dir := v.projectDir
+	showArchived := v.showArchived
 	return func() tea.Msg {
+		if showArchived {
+			return v.loadArchivedLists(dir)
+		}
+
 		statuses, err := service.GetProjectListStatuses(ctx(), dir)
 		if err != nil {
 			return ErrorMsg{Err: fmt.Errorf("loading lists: %w", err)}
@@ -71,6 +79,31 @@ func (v *TodoListView) loadLists() tea.Cmd {
 		}
 		return TodoListsLoadedMsg{Lists: lists}
 	}
+}
+
+func (v *TodoListView) loadArchivedLists(dir string) tea.Msg {
+	names, err := todo.ArchivedListNames(dir)
+	if err != nil {
+		return ErrorMsg{Err: fmt.Errorf("loading archived lists: %w", err)}
+	}
+
+	var lists []TodoListInfo
+	archiveDir := filepath.Join(todo.ListDir(dir), ".archive")
+	for _, name := range names {
+		info := TodoListInfo{Name: name}
+		// Load the archived list to get counts
+		path := filepath.Join(archiveDir, name+".md")
+		if data, err := os.ReadFile(path); err == nil {
+			if list, err := todo.Parse(string(data)); err == nil {
+				open, done, blocked := todo.CountStates(list.Items)
+				info.Open = open
+				info.Done = done
+				info.Blocked = blocked
+			}
+		}
+		lists = append(lists, info)
+	}
+	return TodoListsLoadedMsg{Lists: lists}
 }
 
 // IsInputMode reports whether the view is in an interactive mode.
@@ -189,12 +222,27 @@ func (v *TodoListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, TodoListKeyMap.Archive):
-			name := v.selectedName()
-			if name != "" {
-				v.confirmMode = true
-				v.confirmPrompt = fmt.Sprintf("Archive list %q? (y/n)", name)
-				v.confirmAction = func() tea.Cmd {
-					return v.doArchiveList(name)
+			if !v.showArchived {
+				name := v.selectedName()
+				if name != "" {
+					v.confirmMode = true
+					v.confirmPrompt = fmt.Sprintf("Archive list %q? (y/n)", name)
+					v.confirmAction = func() tea.Cmd {
+						return v.doArchiveList(name)
+					}
+				}
+			}
+
+		case msg.String() == "A":
+			v.showArchived = !v.showArchived
+			v.cursor = 0
+			return v, v.loadLists()
+
+		case msg.String() == "R":
+			if v.showArchived {
+				name := v.selectedName()
+				if name != "" {
+					return v, v.doRestoreList(name)
 				}
 			}
 		}
@@ -316,8 +364,41 @@ func (v *TodoListView) doArchiveList(name string) tea.Cmd {
 	}
 }
 
+func (v *TodoListView) doRestoreList(name string) tea.Cmd {
+	dir := v.projectDir
+	return func() tea.Msg {
+		lk, err := lock.Acquire(dir)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("lock: %w", err)}
+		}
+		defer lk.Release()
+
+		archiveDir := filepath.Join(todo.ListDir(dir), ".archive")
+		archivedPath := filepath.Join(archiveDir, name+".md")
+		activePath := todo.ListPath(dir, name)
+
+		if _, err := os.Stat(archivedPath); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("archived list %q not found", name)}
+		}
+		if err := os.MkdirAll(filepath.Dir(activePath), 0o755); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("creating dir: %w", err)}
+		}
+		if err := os.Rename(archivedPath, activePath); err != nil {
+			return ErrorMsg{Err: fmt.Errorf("restoring: %w", err)}
+		}
+		todo.CleanEmptyParents(archivedPath, archiveDir)
+
+		_ = git.CommitAll(context.Background(), dir, fmt.Sprintf("tui: restore list %s", name))
+		return DataChangedMsg{StatusText: fmt.Sprintf("Restored list %s", name)}
+	}
+}
+
 func (v *TodoListView) View() string {
-	title := TitleStyle.Render(v.projectName) + HelpStyle.Render(" · Todo Lists")
+	titleSuffix := " · Todo Lists"
+	if v.showArchived {
+		titleSuffix = " · Todo Lists (archived)"
+	}
+	title := TitleStyle.Render(v.projectName) + HelpStyle.Render(titleSuffix)
 
 	if !v.loaded {
 		return title + "\n\n" + HelpStyle.Render("  Loading...")
@@ -378,8 +459,10 @@ func (v *TodoListView) View() string {
 		sb.WriteString("\n" + HelpStyle.Render("  "+v.inputPrompt) + v.inputValue + cursorChar)
 	} else if v.confirmMode {
 		sb.WriteString("\n" + ErrorStyle.Render("  "+v.confirmPrompt))
+	} else if v.showArchived {
+		sb.WriteString("\n" + HelpStyle.Render("  ↑↓/jk nav  Enter open  R restore  d delete  A active  Tab knowledge  ? help"))
 	} else {
-		sb.WriteString("\n" + HelpStyle.Render("  ↑↓/jk nav  ^D/^U page  Enter open  n new  d del  a archive  Tab knowledge  ? help"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑↓/jk nav  ^D/^U page  Enter open  n new  d del  a archive  A archived  Tab knowledge  ? help"))
 	}
 
 	return sb.String()

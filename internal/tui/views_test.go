@@ -1349,6 +1349,67 @@ func TestTodoListView_ConfirmMode_ArchiveList(t *testing.T) {
 	}
 }
 
+func TestTodoListView_ToggleArchived_Key(t *testing.T) {
+	v := NewTodoListView("proj", "/tmp/proj", 80, 24)
+	v.Update(TodoListsLoadedMsg{Lists: []TodoListInfo{{Name: "a"}}})
+
+	if v.showArchived {
+		t.Error("should not be in archived view initially")
+	}
+
+	// Press 'A' to toggle
+	_, cmd := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")})
+	if !v.showArchived {
+		t.Error("should be in archived view after 'A'")
+	}
+	if v.cursor != 0 {
+		t.Error("cursor should reset to 0 on toggle")
+	}
+	if cmd == nil {
+		t.Error("should return reload command")
+	}
+
+	// Press 'A' again to toggle back
+	v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("A")})
+	if v.showArchived {
+		t.Error("should be back in active view after second 'A'")
+	}
+}
+
+func TestTodoListView_Restore_OnlyInArchived(t *testing.T) {
+	v := NewTodoListView("proj", "/tmp/proj", 80, 24)
+	v.Update(TodoListsLoadedMsg{Lists: []TodoListInfo{{Name: "a"}}})
+
+	// 'R' in active view — no command
+	_, cmd := v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	if cmd != nil {
+		t.Error("'R' should do nothing in active view")
+	}
+}
+
+func TestTodoListView_Archive_OnlyInActive(t *testing.T) {
+	v := NewTodoListView("proj", "/tmp/proj", 80, 24)
+	v.Update(TodoListsLoadedMsg{Lists: []TodoListInfo{{Name: "a"}}})
+	v.showArchived = true
+
+	// 'a' in archived view — no confirm mode
+	v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	if v.confirmMode {
+		t.Error("'a' should not trigger archive in archived view")
+	}
+}
+
+func TestTodoListView_ArchivedViewTitle(t *testing.T) {
+	v := NewTodoListView("proj", "/tmp/proj", 80, 24)
+	v.Update(TodoListsLoadedMsg{Lists: nil})
+
+	v.showArchived = true
+	view := v.View()
+	if !strings.Contains(view, "(archived)") {
+		t.Error("should show '(archived)' in title when in archived view")
+	}
+}
+
 // =======================================================================
 // Helper Function Tests
 // =======================================================================

@@ -107,6 +107,8 @@ func renderContextHelp(viewType ViewType) string {
 			{"n", "new list"},
 			{"d", "delete list"},
 			{"a", "archive list"},
+			{"A", "toggle archived view"},
+			{"R", "restore (archived)"},
 			{"/", "search"},
 			{"S", "project status"},
 		}
