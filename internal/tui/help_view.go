@@ -39,7 +39,7 @@ func renderContextHelp(viewType ViewType) string {
 		sb.WriteString(HelpStyle.Render("    p  cycle priority     n  new item    e  edit text") + "\n")
 		sb.WriteString(HelpStyle.Render("    D  due date   t  tags   m  move to list   r  remove") + "\n")
 		sb.WriteString(HelpStyle.Render("    f  cycle filter  0-3  filter by state  P  priority filter") + "\n")
-		sb.WriteString(HelpStyle.Render("    Enter  open item detail") + "\n\n")
+		sb.WriteString(HelpStyle.Render("    w  wrap/unwrap        Enter  open item detail") + "\n\n")
 
 	case ViewItemDetail:
 		sb.WriteString("  " + TitleStyle.Render("Item Detail") + "\n")

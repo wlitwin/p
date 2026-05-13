@@ -91,6 +91,7 @@ var ItemListKeyMap = struct {
 	FilterBlocked  key.Binding
 	CycleFilter    key.Binding
 	PriorityFilter key.Binding
+	WrapToggle     key.Binding
 }{
 	ToggleDone: key.NewBinding(
 		key.WithKeys(" ", "d"),
@@ -159,5 +160,9 @@ var ItemListKeyMap = struct {
 	PriorityFilter: key.NewBinding(
 		key.WithKeys("P"),
 		key.WithHelp("P", "priority filter"),
+	),
+	WrapToggle: key.NewBinding(
+		key.WithKeys("w"),
+		key.WithHelp("w", "wrap/unwrap"),
 	),
 }

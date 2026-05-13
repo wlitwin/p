@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/walter/p/internal/git"
 	"github.com/walter/p/internal/lock"
 	"github.com/walter/p/internal/service"
@@ -54,6 +55,10 @@ type ItemListView struct {
 	width  int
 	height int
 	loaded bool
+
+	// Display mode: compact (default) or wrapped
+	wrapMode     bool
+	scrollOffset int
 
 	// Inline text input state
 	inputMode   bool
@@ -285,6 +290,11 @@ func (v *ItemListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Priority filter
 		case key.Matches(msg, ItemListKeyMap.PriorityFilter):
 			v.cyclePriorityFilter()
+
+		// Wrap mode toggle
+		case key.Matches(msg, ItemListKeyMap.WrapToggle):
+			v.wrapMode = !v.wrapMode
+			v.scrollOffset = 0
 
 		// Remove with confirmation
 		case key.Matches(msg, ItemListKeyMap.Remove):
@@ -720,7 +730,7 @@ func (v *ItemListView) View() string {
 
 	s := title + "\n"
 
-	// Filter indicator line
+	// Filter indicator line with display mode
 	var filters []string
 	filterLabel := "all"
 	if v.filter != filterAll {
@@ -731,7 +741,13 @@ func (v *ItemListView) View() string {
 	if v.priorityFilter != priorityFilterAll {
 		filters = append(filters, fmt.Sprintf("Priority: %s", string(v.priorityFilter)))
 	}
-	s += HelpStyle.Render(fmt.Sprintf("  Filter: %s", strings.Join(filters, " · "))) + "\n\n"
+
+	displayMode := "compact"
+	if v.wrapMode {
+		displayMode = "wrapped"
+	}
+	s += HelpStyle.Render(fmt.Sprintf("  Filter: %s · Display: %s",
+		strings.Join(filters, " · "), displayMode)) + "\n\n"
 
 	// Move-to-list overlay
 	if v.moveMode {
@@ -747,86 +763,41 @@ func (v *ItemListView) View() string {
 		}
 		s += "\n"
 	} else {
+		// Pre-render all items into variable-height line groups
+		allRenderedLines := make([][]string, len(v.items))
+		itemHeights := make([]int, len(v.items))
+		for i, fi := range v.items {
+			lines := v.renderItemLines(fi, i == v.cursor)
+			allRenderedLines[i] = lines
+			itemHeights[i] = len(lines)
+		}
+
 		// Calculate visible area for scrolling
-		visibleHeight := v.height - 7 // title + filter + help + padding
-		if visibleHeight < 3 {
-			visibleHeight = 3
+		viewportHeight := v.height - 7 // title + filter + help + padding
+		if viewportHeight < 3 {
+			viewportHeight = 3
 		}
 
-		scrollStart := 0
-		if v.cursor >= scrollStart+visibleHeight {
-			scrollStart = v.cursor - visibleHeight + 1
+		// Adjust scroll offset to keep cursor item fully visible
+		v.scrollOffset = calcScrollOffset(itemHeights, v.cursor, v.scrollOffset, viewportHeight)
+
+		// Flatten all lines and slice the visible portion
+		var flatLines []string
+		for _, lines := range allRenderedLines {
+			flatLines = append(flatLines, lines...)
 		}
-		scrollEnd := scrollStart + visibleHeight
-		if scrollEnd > len(v.items) {
-			scrollEnd = len(v.items)
+
+		start := v.scrollOffset
+		if start > len(flatLines) {
+			start = len(flatLines)
+		}
+		end := start + viewportHeight
+		if end > len(flatLines) {
+			end = len(flatLines)
 		}
 
-		for i := scrollStart; i < scrollEnd; i++ {
-			fi := v.items[i]
-			item := fi.Item
-
-			cursor := "  "
-			if v.cursor == i {
-				cursor = CursorStyle.Render("▸ ")
-			}
-
-			// State marker using the same markers as the markdown format
-			marker := "[ ]"
-			switch item.State {
-			case todo.Done:
-				marker = "[x]"
-			case todo.Blocked:
-				marker = "[-]"
-			}
-
-			var styledMarker string
-			switch item.State {
-			case todo.Done:
-				styledMarker = DoneStyle.Render(marker)
-			case todo.Blocked:
-				styledMarker = BlockedStyle.Render(marker)
-			default:
-				styledMarker = OpenStyle.Render(marker)
-			}
-
-			// Positional ID
-			styledID := HelpStyle.Render(fi.OriginalID + ".")
-
-			// Item text — dim if done
-			text := item.Text
-			if item.State == todo.Done {
-				text = DoneStyle.Render(text)
-			}
-
-			// Metadata: priority and due date
-			var meta []string
-			switch item.Priority {
-			case todo.Now:
-				meta = append(meta, NowStyle.Render("now"))
-			case todo.Backlog:
-				meta = append(meta, BacklogStyle.Render("backlog"))
-			}
-			if item.Due != "" {
-				meta = append(meta, Cyan.Render(item.Due))
-			}
-			if len(item.Tags) > 0 {
-				meta = append(meta, HelpStyle.Render("#"+strings.Join(item.Tags, " #")))
-			}
-
-			metaStr := ""
-			if len(meta) > 0 {
-				metaStr = "  " + strings.Join(meta, " ")
-			}
-
-			// Indentation for nested items (based on dots in ID)
-			indent := ""
-			dots := strings.Count(fi.OriginalID, ".")
-			for d := 0; d < dots; d++ {
-				indent += "  "
-			}
-
-			s += fmt.Sprintf("%s%s%s %s %s%s\n", cursor, indent, styledID, styledMarker, text, metaStr)
+		for _, line := range flatLines[start:end] {
+			s += line + "\n"
 		}
 	}
 
@@ -837,10 +808,147 @@ func (v *ItemListView) View() string {
 	} else if v.confirmMode {
 		s += "\n" + ErrorStyle.Render("  "+v.confirmPrompt)
 	} else {
-		s += "\n" + HelpStyle.Render("  ↑↓ nav  Space toggle  o/b/x state  p priority  n new  e edit  f/P filter  r remove")
+		wrapHint := "w wrap"
+		if v.wrapMode {
+			wrapHint = "w unwrap"
+		}
+		s += "\n" + HelpStyle.Render("  ↑↓ nav  Space toggle  o/b/x state  p priority  n new  e edit  f/P filter  " + wrapHint + "  r remove")
 	}
 
 	return s
+}
+
+// renderItemLines renders a single item into one or more display lines.
+// In compact mode, non-selected items are truncated to one line while the
+// selected item shows full wrapped text. In wrapped mode, all items show
+// full soft-wrapped text with continuation lines indented to align with the
+// text start.
+func (v *ItemListView) renderItemLines(fi filteredItem, isSelected bool) []string {
+	item := fi.Item
+
+	// Cursor indicator
+	cursor := "  "
+	if isSelected {
+		cursor = CursorStyle.Render("▸ ")
+	}
+
+	// Indentation for nested items (based on dots in ID)
+	dots := strings.Count(fi.OriginalID, ".")
+	indent := strings.Repeat("  ", dots)
+
+	// State marker
+	marker := "[ ]"
+	switch item.State {
+	case todo.Done:
+		marker = "[x]"
+	case todo.Blocked:
+		marker = "[-]"
+	}
+	var styledMarker string
+	switch item.State {
+	case todo.Done:
+		styledMarker = DoneStyle.Render(marker)
+	case todo.Blocked:
+		styledMarker = BlockedStyle.Render(marker)
+	default:
+		styledMarker = OpenStyle.Render(marker)
+	}
+
+	// Positional ID
+	styledID := HelpStyle.Render(fi.OriginalID + ".")
+
+	// Build prefix: cursor + indent + ID + marker
+	prefix := cursor + indent + styledID + " " + styledMarker + " "
+	prefixWidth := lipgloss.Width(prefix)
+
+	// Build metadata suffix
+	var metaParts []string
+	switch item.Priority {
+	case todo.Now:
+		metaParts = append(metaParts, NowStyle.Render("now"))
+	case todo.Backlog:
+		metaParts = append(metaParts, BacklogStyle.Render("backlog"))
+	}
+	if item.Due != "" {
+		metaParts = append(metaParts, Cyan.Render(item.Due))
+	}
+	if len(item.Tags) > 0 {
+		metaParts = append(metaParts, HelpStyle.Render("#"+strings.Join(item.Tags, " #")))
+	}
+	metaStr := ""
+	if len(metaParts) > 0 {
+		metaStr = "  " + strings.Join(metaParts, " ")
+	}
+	metaWidth := lipgloss.Width(metaStr)
+
+	// Available width for text content
+	textAvailWidth := v.width - prefixWidth
+	if textAvailWidth < 1 {
+		textAvailWidth = 1
+	}
+
+	// Determine whether to wrap this item
+	shouldWrap := v.wrapMode || isSelected
+
+	if !shouldWrap {
+		// Compact: single line, truncate text with room for metadata
+		maxTextWidth := textAvailWidth - metaWidth
+		if maxTextWidth < 1 {
+			maxTextWidth = 1
+		}
+		displayText := truncateText(item.Text, maxTextWidth)
+		if item.State == todo.Done {
+			displayText = DoneStyle.Render(displayText)
+		}
+
+		padding := textAvailWidth - lipgloss.Width(displayText) - metaWidth
+		if padding < 0 {
+			padding = 0
+		}
+
+		line := prefix + displayText + strings.Repeat(" ", padding) + metaStr
+		return []string{line}
+	}
+
+	// Wrapped mode: soft-wrap text across multiple lines
+	wrappedTextLines := wrapLine(item.Text, textAvailWidth, prefixWidth)
+
+	var result []string
+	for i, wl := range wrappedTextLines {
+		// Style done items — apply dim style to text portion only
+		styledText := wl
+		if item.State == todo.Done {
+			if i > 0 && prefixWidth > 0 {
+				// Continuation line: indent spaces + text
+				indentStr := strings.Repeat(" ", prefixWidth)
+				textPart := strings.TrimPrefix(wl, indentStr)
+				styledText = indentStr + DoneStyle.Render(textPart)
+			} else {
+				styledText = DoneStyle.Render(wl)
+			}
+		}
+
+		var line string
+		if i == 0 {
+			line = prefix + styledText
+		} else {
+			line = styledText
+		}
+
+		// Add metadata to the last line
+		if i == len(wrappedTextLines)-1 && metaStr != "" {
+			lineWidth := lipgloss.Width(line)
+			padding := v.width - lineWidth - metaWidth
+			if padding < 0 {
+				padding = 1
+			}
+			line += strings.Repeat(" ", padding) + metaStr
+		}
+
+		result = append(result, line)
+	}
+
+	return result
 }
 
 // renderMoveMode draws the move-to-list selection overlay.
