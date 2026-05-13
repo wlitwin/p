@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/glamour"
@@ -144,6 +145,7 @@ func (v *KnowledgeView) maxScroll() int {
 // Cached glamour renderer — initialized once, reused across all renders.
 // Word wrap is set to a reasonable default; content is indented separately.
 var (
+	glamourMu           sync.Mutex
 	glamourRenderer     *glamour.TermRenderer
 	glamourRendererWrap int
 )
@@ -151,6 +153,9 @@ var (
 // getGlamourRenderer returns a cached glamour renderer, creating one if needed
 // or if the word wrap width has changed significantly (>10 columns).
 func getGlamourRenderer(wordWrap int) *glamour.TermRenderer {
+	glamourMu.Lock()
+	defer glamourMu.Unlock()
+
 	if glamourRenderer != nil && abs(glamourRendererWrap-wordWrap) < 10 {
 		return glamourRenderer
 	}
@@ -166,6 +171,13 @@ func getGlamourRenderer(wordWrap int) *glamour.TermRenderer {
 	glamourRenderer = r
 	glamourRendererWrap = wordWrap
 	return r
+}
+
+// prewarmGlamourRenderer initializes the glamour renderer eagerly so it's
+// ready by the time a user navigates to a knowledge doc. Uses a default width
+// of 80 since the renderer only recreates on >10 column delta.
+func prewarmGlamourRenderer() {
+	getGlamourRenderer(80)
 }
 
 func abs(x int) int {

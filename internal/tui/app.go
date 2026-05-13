@@ -91,6 +91,7 @@ func (a *App) Init() tea.Cmd {
 	if a.activeView == nil {
 		a.StartAtProjectList()
 	}
+	go prewarmGlamourRenderer()
 	return a.activeView.Init()
 }
 
@@ -226,7 +227,9 @@ func (a *App) cycleTheme() tea.Cmd {
 	ThemeApplyFunc(a.config)
 
 	// Invalidate cached glamour renderer so it picks up new glamour theme
+	glamourMu.Lock()
 	glamourRenderer = nil
+	glamourMu.Unlock()
 
 	return func() tea.Msg {
 		return StatusMsg{Text: "Theme: " + next}
