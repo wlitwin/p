@@ -322,9 +322,9 @@ func TestCalcScrollOffset_NegativeScrollClamped(t *testing.T) {
 // Compact Mode Tests
 // =======================================================================
 
-func TestItemListView_CompactMode_SelectedItemWraps(t *testing.T) {
+func TestItemListView_CompactMode_SelectedItemTruncated(t *testing.T) {
 	v := NewItemListView("proj", "/tmp/proj", "backlog", 50, 24)
-	longText := "This is a very long item text that should wrap when selected in compact mode"
+	longText := "This is a very long item text that should be truncated even when selected in compact mode"
 	v.Update(ListLoadedMsg{List: &todo.List{
 		Items: []*todo.Item{
 			{Text: longText, State: todo.Open},
@@ -335,9 +335,12 @@ func TestItemListView_CompactMode_SelectedItemWraps(t *testing.T) {
 	v.cursor = 0 // Select the long item
 	view := v.View()
 
-	// The selected item text should appear fully (not truncated)
-	if !strings.Contains(view, "wrap when selected") {
-		t.Errorf("selected item should show full wrapped text, got:\n%s", view)
+	// In compact mode, even the selected item should be truncated
+	if strings.Contains(view, "even when selected") {
+		t.Errorf("selected item should be truncated in compact mode, got:\n%s", view)
+	}
+	if !strings.Contains(view, "…") {
+		t.Errorf("selected item should show ellipsis when truncated, got:\n%s", view)
 	}
 }
 
@@ -363,7 +366,7 @@ func TestItemListView_CompactMode_NonSelectedTruncated(t *testing.T) {
 	}
 }
 
-func TestItemListView_CompactMode_CursorMoveExpandsNewItem(t *testing.T) {
+func TestItemListView_CompactMode_AllItemsTruncated(t *testing.T) {
 	v := NewItemListView("proj", "/tmp/proj", "backlog", 40, 24)
 	longText1 := "First long item that needs wrapping when displayed in the TUI view"
 	longText2 := "Second long item that also needs wrapping when displayed in the TUI view"
@@ -374,23 +377,21 @@ func TestItemListView_CompactMode_CursorMoveExpandsNewItem(t *testing.T) {
 		},
 	}})
 
-	// Start at first item — it should be expanded (wrapping across multiple lines)
+	// In compact mode, both items should be truncated regardless of cursor position
 	v.cursor = 0
 	view1 := v.View()
-	// Full text should appear — "TUI view" is at the end so it only shows when expanded
-	if !strings.Contains(view1, "TUI view") {
-		t.Errorf("first item should be expanded when selected, got:\n%s", view1)
+	if strings.Contains(view1, "TUI view") {
+		t.Errorf("items should be truncated in compact mode even when selected, got:\n%s", view1)
+	}
+	if !strings.Contains(view1, "…") {
+		t.Errorf("long items should show ellipsis in compact mode, got:\n%s", view1)
 	}
 
-	// Move to second item — it should now be expanded
+	// Moving cursor should not expand any item
 	v.cursor = 1
 	view2 := v.View()
-	if !strings.Contains(view2, "TUI view") && !strings.Contains(view2, "in the TUI") {
-		t.Errorf("second item should be expanded when selected, got:\n%s", view2)
-	}
-	// First item should be truncated (ellipsis)
-	if !strings.Contains(view2, "…") {
-		t.Errorf("first item should be truncated when not selected, got:\n%s", view2)
+	if strings.Contains(view2, "TUI view") {
+		t.Errorf("items should remain truncated in compact mode, got:\n%s", view2)
 	}
 }
 

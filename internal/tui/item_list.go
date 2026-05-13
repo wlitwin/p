@@ -819,10 +819,9 @@ func (v *ItemListView) View() string {
 }
 
 // renderItemLines renders a single item into one or more display lines.
-// In compact mode, non-selected items are truncated to one line while the
-// selected item shows full wrapped text. In wrapped mode, all items show
-// full soft-wrapped text with continuation lines indented to align with the
-// text start.
+// In compact mode, all items are truncated to one line. In wrapped mode
+// (toggled with 'w'), all items show full soft-wrapped text with
+// continuation lines indented to align with the text start.
 func (v *ItemListView) renderItemLines(fi filteredItem, isSelected bool) []string {
 	item := fi.Item
 
@@ -887,8 +886,8 @@ func (v *ItemListView) renderItemLines(fi filteredItem, isSelected bool) []strin
 		textAvailWidth = 1
 	}
 
-	// Determine whether to wrap this item
-	shouldWrap := v.wrapMode || isSelected
+	// Determine whether to wrap this item — only in explicit wrap mode
+	shouldWrap := v.wrapMode
 
 	if !shouldWrap {
 		// Compact: single line, truncate text with room for metadata
