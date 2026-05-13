@@ -448,9 +448,10 @@ func (v *ItemDetailView) View() string {
 			childID := fmt.Sprintf("%s.%d", v.itemID, i+1)
 			childMarker, _ := stateDisplay(child.State)
 			var childMeta []string
-			if child.Priority == todo.Now {
+			switch child.Priority {
+			case todo.Now:
 				childMeta = append(childMeta, NowStyle.Render("now"))
-			} else if child.Priority == todo.Backlog {
+			case todo.Backlog:
 				childMeta = append(childMeta, BacklogStyle.Render("backlog"))
 			}
 			if child.Due != "" {

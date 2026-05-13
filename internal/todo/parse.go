@@ -77,7 +77,8 @@ func parseFrontmatter(list *List, lines []string) {
 				list.Updated = t
 			}
 		case "context":
-			if val == "" {
+			switch val {
+			case "":
 				// Multi-line YAML list: collect "- value" lines
 				var patterns []string
 				for i+1 < len(lines) && strings.HasPrefix(lines[i+1], "- ") {
@@ -89,11 +90,9 @@ func parseFrontmatter(list *List, lines []string) {
 					patterns = []string{}
 				}
 				list.Context = patterns
-			} else if val == "[]" {
-				// Explicit empty list
+			case "[]":
 				list.Context = []string{}
-			} else {
-				// Single value on same line
+			default:
 				list.Context = []string{val}
 			}
 		}

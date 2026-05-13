@@ -422,7 +422,7 @@ func TestKnowledgeListView_Restore(t *testing.T) {
 	}
 
 	// Press 'R' to restore
-	v, cmd = pressKey(v, "R")
+	_, cmd = pressKey(v, "R")
 	if cmd == nil {
 		t.Fatal("'R' should return a restore command")
 	}
@@ -616,7 +616,7 @@ func TestKnowledgeView_Archive_NavigatesBack(t *testing.T) {
 	v.Update(msg)
 
 	// Press 'a' to archive
-	v, cmd = kvPressKey(v, "a")
+	_, cmd = kvPressKey(v, "a")
 	if cmd == nil {
 		t.Fatal("'a' should return archive command")
 	}
@@ -842,7 +842,7 @@ func TestKnowledgeListView_DeleteArchivedDoc(t *testing.T) {
 		t.Fatal("should enter confirm mode")
 	}
 
-	v, cmd = pressKey(v, "y")
+	_, cmd = pressKey(v, "y")
 	result := cmd()
 	if _, ok := result.(DataChangedMsg); !ok {
 		if errMsg, isErr := result.(ErrorMsg); isErr {
@@ -1217,7 +1217,7 @@ func TestKnowledgeView_Search_NoMatches(t *testing.T) {
 
 	// n/N should not crash with no matches
 	v, _ = kvPressKey(v, "n")
-	v, _ = kvPressKey(v, "N")
+	_, _ = kvPressKey(v, "N")
 }
 
 func TestKnowledgeView_Search_HelpBar(t *testing.T) {

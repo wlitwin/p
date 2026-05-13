@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func setupTestProject(t *testing.T) string {
@@ -499,7 +502,7 @@ func setupMatchTestProject(t *testing.T) string {
 		"deploy-runbook",
 	}
 	for _, name := range docs {
-		if err := Create(dir, name, strings.Title(name), nil); err != nil {
+		if err := Create(dir, name, cases.Title(language.English).String(name), nil); err != nil {
 			t.Fatalf("Create(%s) failed: %v", name, err)
 		}
 	}

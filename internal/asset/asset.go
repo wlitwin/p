@@ -49,16 +49,16 @@ func Copy(projectDir, srcPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("opening source: %w", err)
 	}
-	defer src.Close()
+	defer src.Close() //nolint:errcheck
 
 	dst, err := os.Create(dstPath)
 	if err != nil {
 		return "", fmt.Errorf("creating destination: %w", err)
 	}
-	defer dst.Close()
+	defer dst.Close() //nolint:errcheck
 
 	if _, err := io.Copy(dst, src); err != nil {
-		os.Remove(dstPath) // clean up on failure
+		os.Remove(dstPath) //nolint:errcheck // best-effort cleanup
 		return "", fmt.Errorf("copying file: %w", err)
 	}
 

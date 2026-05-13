@@ -38,7 +38,6 @@ func wrapLine(text string, maxWidth, continuationIndent int) []string {
 			currentLine += " " + word
 		} else {
 			lines = append(lines, currentLine)
-			currentLine = ""
 			// Hard-wrap words longer than maxWidth
 			for len(word) > maxWidth {
 				lines = append(lines, word[:maxWidth])

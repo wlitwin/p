@@ -1136,7 +1136,7 @@ func TestIntegration_TodoListView_ArchiveNotInArchivedView(t *testing.T) {
 	v.Update(cmd())
 
 	// 'a' in archived view should not trigger archive
-	_, cmd = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	_, _ = v.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
 	if v.confirmMode {
 		t.Error("'a' should not enter confirm mode in archived view")
 	}

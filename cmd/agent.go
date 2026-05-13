@@ -77,7 +77,7 @@ Examples:
 
 		fmt.Fprintf(os.Stderr, "🤖 Starting agent loop for %s/%s (max %d iterations)\n\n", projectName, listName, maxIter)
 
-		var lastOpenCount int = -1
+		var lastOpenCount = -1
 
 		for iter := 1; iter <= maxIter; iter++ {
 			// Load current list state

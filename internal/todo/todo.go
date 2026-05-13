@@ -381,7 +381,7 @@ func CleanEmptyParents(path, stopAt string) {
 		if err != nil || len(entries) > 0 {
 			break
 		}
-		os.Remove(dir)
+		os.Remove(dir) //nolint:errcheck // best-effort cleanup
 		dir = filepath.Dir(dir)
 	}
 }
