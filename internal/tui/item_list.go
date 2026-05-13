@@ -206,6 +206,22 @@ func (v *ItemListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if v.cursor < len(v.items)-1 {
 				v.cursor++
 			}
+		case key.Matches(msg, NavKeyMap.HalfDown):
+			pageSize := max(1, (v.height-7)/2)
+			v.cursor += pageSize
+			if v.cursor >= len(v.items) {
+				v.cursor = max(0, len(v.items)-1)
+			}
+		case key.Matches(msg, NavKeyMap.HalfUp):
+			pageSize := max(1, (v.height-7)/2)
+			v.cursor -= pageSize
+			if v.cursor < 0 {
+				v.cursor = 0
+			}
+		case key.Matches(msg, NavKeyMap.Bottom):
+			v.cursor = max(0, len(v.items)-1)
+		case msg.String() == "g":
+			v.cursor = 0
 
 		// Open detail view
 		case key.Matches(msg, NavKeyMap.Enter):
@@ -812,7 +828,7 @@ func (v *ItemListView) View() string {
 		if v.wrapMode {
 			wrapHint = "w unwrap"
 		}
-		s += "\n" + HelpStyle.Render("  ↑↓ nav  Space toggle  o/b/x state  p priority  n new  e edit  f/P filter  " + wrapHint + "  r remove")
+		s += "\n" + HelpStyle.Render("  ↑↓/jk nav  ^D/^U page  Space toggle  o/b/x state  p pri  n new  e edit  f filter  "+wrapHint+"  ? help")
 	}
 
 	return s

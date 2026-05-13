@@ -89,6 +89,23 @@ func (v *ProjectListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.cursor++
 			}
 
+		case key.Matches(msg, NavKeyMap.HalfDown):
+			pageSize := max(1, (v.height-6)/2)
+			v.cursor += pageSize
+			if v.cursor >= len(v.projects) {
+				v.cursor = max(0, len(v.projects)-1)
+			}
+		case key.Matches(msg, NavKeyMap.HalfUp):
+			pageSize := max(1, (v.height-6)/2)
+			v.cursor -= pageSize
+			if v.cursor < 0 {
+				v.cursor = 0
+			}
+		case key.Matches(msg, NavKeyMap.Bottom):
+			v.cursor = max(0, len(v.projects)-1)
+		case msg.String() == "g":
+			v.cursor = 0
+
 		case key.Matches(msg, NavKeyMap.Enter):
 			if len(v.projects) > 0 && v.cursor < len(v.projects) {
 				p := v.projects[v.cursor]
@@ -161,7 +178,7 @@ func (v *ProjectListView) View() string {
 		s += fmt.Sprintf("%s%s%s%s\n", cursor, displayName, spaces(padding), counts)
 	}
 
-	s += "\n" + HelpStyle.Render("  ↑↓ navigate  Enter select  S status  q quit  ? help")
+	s += "\n" + HelpStyle.Render("  ↑↓/jk nav  ^D/^U page  g/G top/bottom  Enter select  S status  ? help")
 
 	return s
 }

@@ -29,9 +29,13 @@ var GlobalKeyMap = struct {
 
 // NavKeyMap defines navigation keybindings shared across list views.
 var NavKeyMap = struct {
-	Up    key.Binding
-	Down  key.Binding
-	Enter key.Binding
+	Up       key.Binding
+	Down     key.Binding
+	Enter    key.Binding
+	HalfUp   key.Binding
+	HalfDown key.Binding
+	Top      key.Binding
+	Bottom   key.Binding
 }{
 	Up: key.NewBinding(
 		key.WithKeys("up", "k"),
@@ -44,6 +48,22 @@ var NavKeyMap = struct {
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
 		key.WithHelp("enter", "select"),
+	),
+	HalfUp: key.NewBinding(
+		key.WithKeys("ctrl+u", "pgup"),
+		key.WithHelp("Ctrl+U", "half page up"),
+	),
+	HalfDown: key.NewBinding(
+		key.WithKeys("ctrl+d", "pgdown"),
+		key.WithHelp("Ctrl+D", "half page down"),
+	),
+	Top: key.NewBinding(
+		key.WithKeys("home"),
+		key.WithHelp("gg", "top"),
+	),
+	Bottom: key.NewBinding(
+		key.WithKeys("end", "G"),
+		key.WithHelp("G", "bottom"),
 	),
 }
 

@@ -124,6 +124,20 @@ func (v *StatusView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, NavKeyMap.Down):
 			v.scrollOffset++
+
+		case key.Matches(msg, NavKeyMap.HalfUp):
+			pageSize := max(1, (v.height-4)/2)
+			v.scrollOffset -= pageSize
+			if v.scrollOffset < 0 {
+				v.scrollOffset = 0
+			}
+
+		case key.Matches(msg, NavKeyMap.HalfDown):
+			pageSize := max(1, (v.height-4)/2)
+			v.scrollOffset += pageSize
+
+		case msg.String() == "g":
+			v.scrollOffset = 0
 		}
 	}
 
@@ -184,7 +198,7 @@ func (v *StatusView) View() string {
 		sb.WriteByte('\n')
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑↓ scroll  Esc back  q quit"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑↓ scroll  ^D/^U page  g top  Esc back  ? help"))
 
 	return sb.String()
 }

@@ -134,6 +134,23 @@ func (v *TodoListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.cursor++
 			}
 
+		case key.Matches(msg, NavKeyMap.HalfDown):
+			pageSize := max(1, (v.height-6)/2)
+			v.cursor += pageSize
+			if v.cursor >= len(v.lists) {
+				v.cursor = max(0, len(v.lists)-1)
+			}
+		case key.Matches(msg, NavKeyMap.HalfUp):
+			pageSize := max(1, (v.height-6)/2)
+			v.cursor -= pageSize
+			if v.cursor < 0 {
+				v.cursor = 0
+			}
+		case key.Matches(msg, NavKeyMap.Bottom):
+			v.cursor = max(0, len(v.lists)-1)
+		case msg.String() == "g":
+			v.cursor = 0
+
 		case key.Matches(msg, NavKeyMap.Enter):
 			if len(v.lists) > 0 && v.cursor < len(v.lists) {
 				l := v.lists[v.cursor]
@@ -362,7 +379,7 @@ func (v *TodoListView) View() string {
 	} else if v.confirmMode {
 		sb.WriteString("\n" + ErrorStyle.Render("  "+v.confirmPrompt))
 	} else {
-		sb.WriteString("\n" + HelpStyle.Render("  ↑↓ nav  Enter open  n new  d delete  a archive  Tab knowledge  / search"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑↓/jk nav  ^D/^U page  Enter open  n new  d del  a archive  Tab knowledge  ? help"))
 	}
 
 	return sb.String()

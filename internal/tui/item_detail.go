@@ -116,6 +116,17 @@ func (v *ItemDetailView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, NavKeyMap.Down):
 			v.scrollOffset++
+		case key.Matches(msg, NavKeyMap.HalfUp):
+			pageSize := max(1, (v.height-4)/2)
+			v.scrollOffset -= pageSize
+			if v.scrollOffset < 0 {
+				v.scrollOffset = 0
+			}
+		case key.Matches(msg, NavKeyMap.HalfDown):
+			pageSize := max(1, (v.height-4)/2)
+			v.scrollOffset += pageSize
+		case msg.String() == "g":
+			v.scrollOffset = 0
 
 		// State changes
 		case key.Matches(msg, ItemListKeyMap.ToggleDone):

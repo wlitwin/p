@@ -182,6 +182,25 @@ func (v *KnowledgeListView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.cursor++
 			}
 
+		case key.Matches(msg, NavKeyMap.HalfDown):
+			visible := v.visibleDocs()
+			pageSize := max(1, (v.height-6)/2)
+			v.cursor += pageSize
+			if v.cursor >= len(visible) {
+				v.cursor = max(0, len(visible)-1)
+			}
+		case key.Matches(msg, NavKeyMap.HalfUp):
+			pageSize := max(1, (v.height-6)/2)
+			v.cursor -= pageSize
+			if v.cursor < 0 {
+				v.cursor = 0
+			}
+		case key.Matches(msg, NavKeyMap.Bottom):
+			visible := v.visibleDocs()
+			v.cursor = max(0, len(visible)-1)
+		case msg.String() == "g":
+			v.cursor = 0
+
 		case key.Matches(msg, NavKeyMap.Enter):
 			visible := v.visibleDocs()
 			if len(visible) > 0 && v.cursor < len(visible) {
@@ -394,7 +413,7 @@ func (v *KnowledgeListView) View() string {
 	} else if v.searchMode {
 		sb.WriteString("\n" + HelpStyle.Render("  ↑↓ navigate  Enter view  Esc cancel search"))
 	} else {
-		sb.WriteString("\n" + HelpStyle.Render("  ↑↓ navigate  Enter view  Tab todos  / search  n new  q quit  ? help"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑↓/jk nav  ^D/^U page  Enter view  Tab todos  / search  n new  ? help"))
 	}
 
 	return sb.String()

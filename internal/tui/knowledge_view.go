@@ -107,14 +107,14 @@ func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.scrollOffset++
 			}
 
-		case msg.String() == "pgup", msg.String() == "ctrl+u":
+		case key.Matches(msg, NavKeyMap.HalfUp):
 			pageSize := v.viewportHeight() / 2
 			v.scrollOffset -= pageSize
 			if v.scrollOffset < 0 {
 				v.scrollOffset = 0
 			}
 
-		case msg.String() == "pgdown", msg.String() == "ctrl+d":
+		case key.Matches(msg, NavKeyMap.HalfDown):
 			pageSize := v.viewportHeight() / 2
 			v.scrollOffset += pageSize
 			maxOffset := v.maxScroll()
@@ -122,10 +122,10 @@ func (v *KnowledgeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				v.scrollOffset = maxOffset
 			}
 
-		case msg.String() == "home", msg.String() == "g":
+		case msg.String() == "g":
 			v.scrollOffset = 0
 
-		case msg.String() == "end", msg.String() == "G":
+		case key.Matches(msg, NavKeyMap.Bottom):
 			v.scrollOffset = v.maxScroll()
 		}
 	}
