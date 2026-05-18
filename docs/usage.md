@@ -35,7 +35,7 @@ This creates a config file at `~/.config/p/config.json` with your project root p
 ### Create your first project
 
 ```bash
-p new my-app --description "Mobile app backend"
+p project new my-app --description "Mobile app backend"
 ```
 
 This creates a new directory under your project root with its own git repository. Every change you make through `p` is automatically committed to this repo.
@@ -46,6 +46,9 @@ This creates a new directory under your project root with its own git repository
 p list                    # See all projects
 p status                  # Overview of open/blocked/done counts
 p how <question>          # Ask how to do something with p
+p ui                      # Launch full-screen TUI
+p ui api-service          # TUI starting at a specific project
+p ui api-service tasks    # TUI starting at a specific list
 ```
 
 ---
@@ -81,6 +84,7 @@ p status api-service      # Detailed view of one project
 
 ```bash
 p project describe api-service REST API for the mobile app
+p project describe api-service --auto    # AI-generated description from project contents
 p project set api-service code_dir ~/code/api-service
 ```
 
@@ -91,6 +95,12 @@ The `code_dir` setting links a project to a code repository, enabling the `p do`
 ```bash
 p project set api-service                       # Show all settings
 p project set api-service code_dir              # Show one setting
+```
+
+### Rename projects
+
+```bash
+p project rename old-service new-service
 ```
 
 ### Archive/unarchive projects
@@ -194,6 +204,18 @@ p todo archive-list api-service feature-a              # Archive one list
 p todo archive-list api-service                        # Auto-archive all 100% done lists
 p todo archive-list api-service feature-a --restore    # Restore from archive
 ```
+
+### Set knowledge context for a list
+
+Control which knowledge docs are included in AI prompts when working on a list:
+
+```bash
+p todo context api-service sprint-1 architecture/* decisions/db-*
+p todo context api-service sprint-1 --show     # Show resolved patterns and matched docs
+p todo context api-service sprint-1 --clear    # Revert to project default or all docs
+```
+
+Pattern syntax: `overview` (exact), `architecture/*` (direct children), `architecture/**` (recursive), `db-*` (prefix), `**` (everything).
 
 ---
 
@@ -311,6 +333,14 @@ p knowledge search api-service "database"
 ```bash
 p knowledge delete api-service old-notes            # Prompts for confirmation
 p knowledge delete api-service old-notes -y         # Skip confirmation
+```
+
+### Archive/restore a knowledge doc
+
+```bash
+p knowledge archive api-service old-decisions              # Move to .archive/
+p knowledge archive api-service old-decisions --restore     # Restore from archive
+p knowledge archive api-service                            # List archived docs
 ```
 
 ### Edit knowledge content
@@ -450,6 +480,20 @@ p do api-service tasks -m "Focus on tests" # Custom instructions
 
 The AI gets full context from your knowledge base and todo lists, works in your code repo, and can mark items done as it completes them.
 
+### Autonomous agent loop (p agent)
+
+Run an AI agent that works through a todo list iteratively, implementing items one at a time until the list is complete or no progress is made:
+
+```bash
+p agent api-service feature-list                       # Work through all open items
+p agent api-service sprint-1 --max-iterations 5        # Limit iterations
+p agent api-service bugs -m "Focus on the critical ones first"
+```
+
+The agent loop stops when: all items are done, an iteration makes no progress, the max iteration count is reached (default 10), or the AI session fails.
+
+Requires `code_dir` to be set (same as `p do`).
+
 ### Custom AI prompts
 
 Customize AI behavior per-project by creating prompt files:
@@ -477,6 +521,7 @@ Supported prompt files:
 - `.p/prompt-plan.md` — Additional instructions for `p plan`
 - `.p/prompt-review.md` — Additional instructions for `p ai review`
 - `.p/prompt-summarize.md` — Additional instructions for `p ai summarize`
+- `.p/prompt-agent.md` — Additional instructions for `p agent`
 - `.p/prompt-add.md` — Additional instructions for `p add --ai`
 
 ---
@@ -692,10 +737,23 @@ p mcp    # Starts MCP server on stdio
 
 This is used internally by AI commands but can also be connected to any MCP-compatible client. Available tools include:
 
-- `todo_list`, `todo_add`, `todo_state`, `todo_update`, `todo_remove`, `todo_move`, `todo_due`, `todo_priority`
-- `knowledge_create`, `knowledge_read`, `knowledge_append`, `knowledge_replace`, `knowledge_rename`, `knowledge_delete`, `knowledge_list`, `knowledge_search`
-- `project_list`, `project_create`, `project_archive`
+- `todo_list`, `todo_add`, `todo_state`, `todo_update`, `todo_remove`, `todo_move`, `todo_due`, `todo_priority`, `todo_tag`, `todo_archive_list`, `todo_rm_list`, `todo_context`
+- `knowledge_create`, `knowledge_read`, `knowledge_append`, `knowledge_replace`, `knowledge_rename`, `knowledge_delete`, `knowledge_archive`, `knowledge_list`, `knowledge_search`
+- `project_list`, `project_create`, `project_archive`, `project_rename`
+- `asset_add`, `asset_list`, `asset_remove`
 - `search`, `status`
+
+### Project assets
+
+Attach files (images, documents, etc.) to a project:
+
+```bash
+p asset add api-service ~/diagrams/architecture.png    # Copy file into project
+p asset list api-service                               # List attached assets
+p asset remove api-service architecture.png            # Remove an asset
+```
+
+Assets are stored in the project's `assets/` directory and tracked by git.
 
 ### Deterministic edit primitives
 

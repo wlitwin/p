@@ -115,6 +115,43 @@ func assetRemoveTool() mcp.Tool {
 	)
 }
 
+func todoArchiveListTool() mcp.Tool {
+	return mcp.NewTool("todo_archive_list",
+		mcp.WithDescription("Archive a completed todo list, or restore one from the archive. If no list is specified, auto-archives all lists where every item is done."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+		mcp.WithString("list", mcp.Description("Todo list name. If omitted, auto-archives all fully-done lists.")),
+		mcp.WithBoolean("restore", mcp.Description("If true, restores the list from the archive instead of archiving it")),
+	)
+}
+
+func todoTagTool() mcp.Tool {
+	return mcp.NewTool("todo_tag",
+		mcp.WithDescription("Add or remove tags on a todo item."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+		mcp.WithString("list", mcp.Description("Todo list name"), mcp.Required()),
+		mcp.WithString("item_id", mcp.Description("Item ID (e.g. '1' or '2.1')"), mcp.Required()),
+		mcp.WithString("tags", mcp.Description("Comma-separated tags to add or remove"), mcp.Required()),
+		mcp.WithBoolean("remove", mcp.Description("If true, removes the specified tags instead of adding them")),
+	)
+}
+
+func knowledgeArchiveTool() mcp.Tool {
+	return mcp.NewTool("knowledge_archive",
+		mcp.WithDescription("Archive a knowledge document to .archive/, or restore one from the archive."),
+		mcp.WithString("project", mcp.Description("Project name"), mcp.Required()),
+		mcp.WithString("filename", mcp.Description("Knowledge doc filename (without .md)"), mcp.Required()),
+		mcp.WithBoolean("restore", mcp.Description("If true, restores from archive instead of archiving")),
+	)
+}
+
+func projectRenameTool() mcp.Tool {
+	return mcp.NewTool("project_rename",
+		mcp.WithDescription("Rename a project directory and update its metadata."),
+		mcp.WithString("old_name", mcp.Description("Current project name"), mcp.Required()),
+		mcp.WithString("new_name", mcp.Description("New project name"), mcp.Required()),
+	)
+}
+
 // --- Handlers ---
 
 func (s *serverCtx) handleProjectCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -467,4 +504,126 @@ func (s *serverCtx) handleAssetRemove(ctx context.Context, req mcp.CallToolReque
 	}
 
 	return textResult(fmt.Sprintf("Removed assets/%s", filename)), nil
+}
+
+func (s *serverCtx) handleTodoArchiveList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	p := newParams(req)
+	proj := p.require("project")
+	if r := p.error(); r != nil {
+		return r, nil
+	}
+
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	listName := p.optional("list", "")
+	restore := p.optionalBool("restore", false)
+
+	if listName == "" {
+		archived, err := service.AutoArchiveDone(ctx, dir)
+		if err != nil {
+			return errResult("%v", err)
+		}
+		if len(archived) == 0 {
+			return textResult("No fully completed lists to archive."), nil
+		}
+		return textResult(fmt.Sprintf("Auto-archived %d list(s): %s", len(archived), strings.Join(archived, ", "))), nil
+	}
+
+	if err := service.ArchiveList(ctx, dir, listName, restore); err != nil {
+		return errResult("%v", err)
+	}
+
+	action := "Archived"
+	if restore {
+		action = "Restored"
+	}
+	return textResult(fmt.Sprintf("%s todo list %q", action, listName)), nil
+}
+
+func (s *serverCtx) handleTodoTag(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	p := newParams(req)
+	proj := p.require("project")
+	listName := p.require("list")
+	itemID := p.require("item_id")
+	tagsStr := p.require("tags")
+	if r := p.error(); r != nil {
+		return r, nil
+	}
+
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	remove := p.optionalBool("remove", false)
+
+	var tags []string
+	for _, t := range strings.Split(tagsStr, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+
+	resultTags, err := service.SetItemTags(ctx, dir, listName, itemID, tags, remove)
+	if err != nil {
+		return errResult("%v", err)
+	}
+
+	action := "Added"
+	if remove {
+		action = "Removed"
+	}
+	return textResult(fmt.Sprintf("%s tags on %s #%s. Current tags: %s", action, listName, itemID, strings.Join(resultTags, ", "))), nil
+}
+
+func (s *serverCtx) handleKnowledgeArchive(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	p := newParams(req)
+	proj := p.require("project")
+	filename := p.require("filename")
+	if r := p.error(); r != nil {
+		return r, nil
+	}
+
+	dir, r, err := s.resolve(proj)
+	if r != nil {
+		return r, err
+	}
+
+	restore := p.optionalBool("restore", false)
+
+	if !restore {
+		if refs := service.KnowledgeArchiveRefs(dir, filename); len(refs) > 0 {
+			// Warn but proceed
+			_ = refs
+		}
+	}
+
+	if err := service.KnowledgeArchive(ctx, dir, filename, restore); err != nil {
+		return errResult("%v", err)
+	}
+
+	action := "Archived"
+	if restore {
+		action = "Restored"
+	}
+	return textResult(fmt.Sprintf("%s knowledge/%s.md", action, filename)), nil
+}
+
+func (s *serverCtx) handleProjectRename(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	p := newParams(req)
+	oldName := p.require("old_name")
+	newName := p.require("new_name")
+	if r := p.error(); r != nil {
+		return r, nil
+	}
+
+	if err := service.ProjectRename(ctx, s.projectRoot, oldName, newName); err != nil {
+		return errResult("%v", err)
+	}
+
+	return textResult(fmt.Sprintf("Renamed project %q to %q", oldName, newName)), nil
 }

@@ -50,6 +50,8 @@ func NewServer(projectRoot string) *server.MCPServer {
 	s.AddTool(todoRemoveTool(), ctx.locked(ctx.handleTodoRemove))
 	s.AddTool(todoMoveTool(), ctx.locked(ctx.handleTodoMove))
 	s.AddTool(todoRmListTool(), ctx.locked(ctx.handleTodoRmList))
+	s.AddTool(todoArchiveListTool(), ctx.locked(ctx.handleTodoArchiveList))
+	s.AddTool(todoTagTool(), ctx.locked(ctx.handleTodoTag))
 	s.AddTool(todoContextTool(), ctx.locked(ctx.handleTodoContext))
 
 	// Asset mutation tools
@@ -63,6 +65,10 @@ func NewServer(projectRoot string) *server.MCPServer {
 	s.AddTool(knowledgeReplaceTool(), ctx.locked(ctx.handleKnowledgeReplace))
 	s.AddTool(knowledgeRenameTool(), ctx.locked(ctx.handleKnowledgeRename))
 	s.AddTool(knowledgeDeleteTool(), ctx.locked(ctx.handleKnowledgeDelete))
+	s.AddTool(knowledgeArchiveTool(), ctx.locked(ctx.handleKnowledgeArchive))
+
+	// Project mutation tools (continued)
+	s.AddTool(projectRenameTool(), ctx.handleProjectRename)
 
 	return s
 }

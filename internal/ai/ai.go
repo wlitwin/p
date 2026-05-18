@@ -160,7 +160,6 @@ func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, op
 		"--output-format", "stream-json",
 		"--system-prompt", prompt,
 		"--mcp-config", mcpJSON,
-		"--tools", "mcp,WebFetch,WebSearch",
 		"--dangerously-skip-permissions",
 		"--model", model,
 		"--name", fmt.Sprintf("p-%s", task.ProjectName),
@@ -206,7 +205,6 @@ func runInteractive(ctx context.Context, claudeBinary, model, prompt, mcpJSON, p
 	args := []string{
 		"--system-prompt", prompt,
 		"--mcp-config", mcpJSON,
-		"--tools", "mcp,WebFetch,WebSearch",
 		"--dangerously-skip-permissions",
 		"--model", model,
 		"--name", fmt.Sprintf("p-%s", projectName),

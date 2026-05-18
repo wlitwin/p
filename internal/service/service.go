@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/walter/p/internal/asset"
 	"github.com/walter/p/internal/git"
@@ -441,4 +442,141 @@ func AssetDelete(_ context.Context, dir, filename string) error {
 // CLI) that need to commit after a service operation.
 func Commit(ctx context.Context, dir, message string) error {
 	return git.CommitAll(ctx, dir, message)
+}
+
+// ArchiveList moves a todo list to the .archive directory, or restores it.
+func ArchiveList(ctx context.Context, dir, listName string, restore bool) error {
+	archiveDir := filepath.Join(todo.ListDir(dir), ".archive")
+	activePath := todo.ListPath(dir, listName)
+	archivedPath := filepath.Join(archiveDir, listName+".md")
+
+	if restore {
+		if _, err := os.Stat(archivedPath); err != nil {
+			return fmt.Errorf("archived list %q not found", listName)
+		}
+		if err := os.MkdirAll(filepath.Dir(activePath), 0o755); err != nil {
+			return err
+		}
+		if err := os.Rename(archivedPath, activePath); err != nil {
+			return err
+		}
+		todo.CleanEmptyParents(archivedPath, archiveDir)
+		return nil
+	}
+
+	if _, err := os.Stat(activePath); err != nil {
+		return fmt.Errorf("todo list %q not found", listName)
+	}
+	if err := os.MkdirAll(filepath.Dir(archivedPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(activePath, archivedPath); err != nil {
+		return err
+	}
+	todo.CleanEmptyParents(activePath, todo.ListDir(dir))
+	return nil
+}
+
+// AutoArchiveDone archives all todo lists where every item is done.
+// Returns the names of archived lists.
+func AutoArchiveDone(ctx context.Context, dir string) ([]string, error) {
+	names, err := todo.ListNames(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var archived []string
+	for _, name := range names {
+		list, err := todo.LoadList(dir, name)
+		if err != nil || len(list.Items) == 0 {
+			continue
+		}
+		if allDone(list.Items) {
+			if err := ArchiveList(ctx, dir, name, false); err != nil {
+				continue
+			}
+			archived = append(archived, name)
+		}
+	}
+	return archived, nil
+}
+
+func allDone(items []*todo.Item) bool {
+	for _, item := range items {
+		if item.State != todo.Done {
+			return false
+		}
+		if len(item.Children) > 0 && !allDone(item.Children) {
+			return false
+		}
+	}
+	return true
+}
+
+// KnowledgeArchive moves a knowledge doc to the .archive directory, or restores it.
+func KnowledgeArchive(ctx context.Context, dir, filename string, restore bool) error {
+	archiveDir := filepath.Join(knowledge.Dir(dir), ".archive")
+	activePath := knowledge.FilePath(dir, filename)
+	archivedPath := filepath.Join(archiveDir, filename+".md")
+
+	if restore {
+		if _, err := os.Stat(archivedPath); err != nil {
+			return fmt.Errorf("archived doc %q not found", filename)
+		}
+		if err := os.MkdirAll(filepath.Dir(activePath), 0o755); err != nil {
+			return err
+		}
+		return os.Rename(archivedPath, activePath)
+	}
+
+	if _, err := os.Stat(activePath); err != nil {
+		return fmt.Errorf("knowledge doc %q not found", filename)
+	}
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+		return err
+	}
+	return os.Rename(activePath, archivedPath)
+}
+
+// KnowledgeArchiveRefs returns todo lists that reference a knowledge doc in their context patterns.
+func KnowledgeArchiveRefs(dir, filename string) []string {
+	return knowledge.FindReferencingLists(dir, filename)
+}
+
+// ProjectRename renames a project directory and updates its metadata.
+func ProjectRename(ctx context.Context, projectRoot, oldName, newName string) error {
+	if oldName == newName {
+		return fmt.Errorf("old and new names are the same")
+	}
+	if err := validate.ProjectName(newName); err != nil {
+		return fmt.Errorf("invalid new name: %w", err)
+	}
+
+	oldDir, err := project.Resolve(projectRoot, oldName)
+	if err != nil {
+		return err
+	}
+
+	newDir := filepath.Join(projectRoot, newName)
+	if _, err := os.Stat(newDir); err == nil {
+		return fmt.Errorf("project %q already exists", newName)
+	}
+
+	if err := os.Rename(oldDir, newDir); err != nil {
+		return fmt.Errorf("renaming directory: %w", err)
+	}
+
+	meta, err := project.LoadMeta(newDir)
+	if err != nil {
+		_ = os.Rename(newDir, oldDir)
+		return fmt.Errorf("loading metadata: %w", err)
+	}
+
+	meta.Name = newName
+	if err := project.SaveMeta(newDir, meta); err != nil {
+		_ = os.Rename(newDir, oldDir)
+		return fmt.Errorf("saving metadata: %w", err)
+	}
+
+	return nil
 }
