@@ -158,7 +158,7 @@ func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, op
 		"--print",
 		"--verbose",
 		"--output-format", "stream-json",
-		"--system-prompt", prompt,
+		"--append-system-prompt", prompt,
 		"--mcp-config", mcpJSON,
 		"--dangerously-skip-permissions",
 		"--model", model,
@@ -203,7 +203,7 @@ func Run(ctx context.Context, pBinary, claudeBinary, model string, task Task, op
 // and MCP config but no --print flag, allowing the user to type directly.
 func runInteractive(ctx context.Context, claudeBinary, model, prompt, mcpJSON, projectName string, opt RunOptions) error {
 	args := []string{
-		"--system-prompt", prompt,
+		"--append-system-prompt", prompt,
 		"--mcp-config", mcpJSON,
 		"--dangerously-skip-permissions",
 		"--model", model,

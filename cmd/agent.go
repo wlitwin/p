@@ -110,7 +110,7 @@ Examples:
 			prompt := buildAgentPrompt(projectName, dir, list, listName, iter, maxIter, userMessage)
 
 			claudeArgs := []string{
-				"--system-prompt", prompt,
+				"--append-system-prompt", prompt,
 				"--mcp-config", mcpJSON,
 				"--dangerously-skip-permissions",
 				"--model", model,

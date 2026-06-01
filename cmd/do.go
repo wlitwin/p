@@ -109,7 +109,7 @@ Examples:
 		}
 
 		claudeArgs := []string{
-			"--system-prompt", taskDesc,
+			"--append-system-prompt", taskDesc,
 			"--mcp-config", mcpJSON,
 			"--dangerously-skip-permissions",
 			"--model", model,
